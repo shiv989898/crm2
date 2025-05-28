@@ -46,10 +46,12 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
   useEffect(() => {
     if (isOpen) {
       setCampaignName(`Campaign for ${audience.name}`);
-      // Reset other fields when dialog opens for a new audience
       setCampaignObjective("");
       setFinalMessageTemplate("");
       setMessageSuggestions([]);
+      // Consider resetting companyName and productOrService if they should be fresh per dialog open
+      // setCompanyName("Nexus CRM"); 
+      // setProductOrService("our services");
     }
   }, [isOpen, audience.name]);
 
@@ -70,7 +72,9 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       });
       setMessageSuggestions(suggestions);
       if (suggestions.length === 0) {
-        toast({ title: "No Suggestions", description: "The AI couldn't generate message suggestions based on your input. Try rephrasing your objective.", variant: "default" });
+        toast({ title: "No Suggestions", description: "The AI couldn't generate message suggestions. Try rephrasing.", variant: "default" });
+      } else {
+        toast({ title: "AI Suggestions Generated!", description: "Review the message ideas below.", variant: "default" });
       }
     } catch (error) {
       console.error("Error generating messages:", error);
@@ -82,63 +86,65 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
 
   const handleUseTemplate = (template: string) => {
     setFinalMessageTemplate(template);
-    toast({ title: "Template Applied!", description: "Message template has been copied to the final message field." });
+    toast({ title: "Template Applied!", description: "Message template has been copied." });
   };
   
   const handleCreateCampaign = async () => {
     if (!campaignName.trim()) {
-      toast({ title: "Campaign Name Required", description: "Please enter a name.", variant: "destructive" });
+      toast({ title: "Campaign Name Required", variant: "destructive" });
       return;
     }
     if (!finalMessageTemplate.trim()) {
-      toast({ title: "Message Template Required", description: "Please provide a message template for the campaign.", variant: "destructive" });
+      toast({ title: "Message Template Required", variant: "destructive" });
       return;
     }
      if (!finalMessageTemplate.toLowerCase().includes("{{customername}}")) {
-      toast({ title: "Missing Placeholder", description: `The final message template must include ${"{{"}customerName${"}}"} for personalization.`, variant: "destructive" });
+      toast({ title: "Missing Placeholder", description: `Template must include ${"{{"}customerName${"}}"}.`, variant: "destructive" });
       return;
     }
 
     setIsLaunching(true);
 
-    const campaignDataForAction: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'sentCount' | 'failedCount' | 'processedCount'> & { status: CampaignStatus } = {
+    const campaignDataForAction: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'sentCount' | 'failedCount' | 'processedCount'> = {
       name: campaignName,
       audienceId: audience.id, 
       audienceName: audience.name,
+      // Simulate audience size for now - in a real app, this would come from the audience definition
       audienceSize: Math.floor(Math.random() * (100 - 10 + 1)) + 10, 
       objective: campaignObjective,
       messageTemplate: finalMessageTemplate,
-      status: "Pending", 
+      // status, createdAt, counts are set by the server action
     };
     
     try {
-      // The type assertion `as Omit<Campaign, 'id'>` is used because the server action will handle
-      // createdAt, counts, and initial status more definitively.
-      const newCampaignId = await startCampaignProcessingAction(campaignDataForAction as Omit<Campaign, 'id'>); 
+      console.log("[CreateCampaignDialog] Attempting to start campaign processing with data:", JSON.stringify(campaignDataForAction));
+      const newCampaignId = await startCampaignProcessingAction(campaignDataForAction); 
+      console.log("[CreateCampaignDialog] Received campaign ID from action:", newCampaignId);
+
       if (newCampaignId) {
         toast({
-          title: "Campaign Processing Started",
-          description: `"${campaignDataForAction.name}" is now being processed. Check dashboard for updates.`,
+          title: "Campaign Processing Started!",
+          description: `"${campaignDataForAction.name}" is now being processed. Check dashboard.`,
+          variant: "default",
         });
         onCampaignCreated(campaignDataForAction.name); 
         onOpenChange(false); 
         router.push('/dashboard'); 
       } else {
-        // This case is hit if startCampaignProcessingAction returns null
         toast({
           title: "Campaign Creation Failed",
-          description: "Could not start campaign. Please check the server logs for more details about the Firestore error.",
+          description: "Could not start campaign. IMPORTANT: Please check the Next.js server terminal logs for detailed Firestore error messages.",
           variant: "destructive",
-          duration: 9000, // Give more time to read
+          duration: 10000, 
         });
       }
     } catch (error) {
-      console.error("Error starting campaign processing:", error);
+      console.error("[CreateCampaignDialog] Error calling startCampaignProcessingAction:", error);
       toast({
-        title: "Processing Error",
-        description: `Could not start campaign processing for "${campaignDataForAction.name}". Error: ${error instanceof Error ? error.message : String(error)}. Check server logs.`,
+        title: "Client-Side Error",
+        description: `Could not initiate campaign processing for "${campaignDataForAction.name}". Error: ${error instanceof Error ? error.message : String(error)}. Check server logs as well.`,
         variant: "destructive",
-        duration: 9000,
+        duration: 10000,
       });
     } finally {
       setIsLaunching(false);
@@ -147,31 +153,31 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!isLaunching) onOpenChange(open); // Prevent closing if launching
+      if (!isLaunching) onOpenChange(open); 
     }}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Create New Campaign for: <span className="text-primary">{audience.name}</span></DialogTitle>
+          <DialogTitle>New Campaign for: <span className="text-primary">{audience.name}</span></DialogTitle>
           <DialogDescription>
-            Define your campaign details, use AI to generate message ideas, and set your final message.
+            Define details, get AI message ideas, and set your final message. Target: ~{Math.floor(Math.random() * 100 + 50)} recipients (simulated).
           </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-6 py-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="campaignName">Campaign Name</Label>
+              <Label htmlFor="campaignNameDialog">Campaign Name</Label>
               <Input
-                id="campaignName"
+                id="campaignNameDialog"
                 value={campaignName}
                 onChange={(e) => setCampaignName(e.target.value)}
                 disabled={isLaunching || isGeneratingMessages}
               />
             </div>
             <div>
-              <Label htmlFor="companyName">Your Company Name (for AI)</Label>
+              <Label htmlFor="companyNameDialog">Your Company Name (for AI)</Label>
               <Input
-                id="companyName"
+                id="companyNameDialog"
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
                 disabled={isLaunching || isGeneratingMessages}
@@ -180,10 +186,10 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
           </div>
 
           <div>
-            <Label htmlFor="campaignObjective">Campaign Objective</Label>
+            <Label htmlFor="campaignObjectiveDialog">Campaign Objective</Label>
             <Textarea
-              id="campaignObjective"
-              placeholder="e.g., Re-engage customers inactive for 3 months, Announce new summer collection"
+              id="campaignObjectiveDialog"
+              placeholder="e.g., Re-engage inactive users, Promote new product X"
               value={campaignObjective}
               onChange={(e) => setCampaignObjective(e.target.value)}
               rows={2}
@@ -192,10 +198,10 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
           </div>
           
           <div>
-            <Label htmlFor="productOrService">Product/Service to Promote (for AI)</Label>
+            <Label htmlFor="productOrServiceDialog">Product/Service to Promote (for AI)</Label>
             <Input
-              id="productOrService"
-              placeholder="e.g., our new loyalty program, exclusive T-shirts"
+              id="productOrServiceDialog"
+              placeholder="e.g., our new loyalty program, summer collection"
               value={productOrService}
               onChange={(e) => setProductOrService(e.target.value)}
               disabled={isLaunching || isGeneratingMessages}
@@ -215,13 +221,13 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
             <div className="space-y-4">
               <h3 className="text-lg font-semibold text-foreground">AI Message Suggestions:</h3>
               {messageSuggestions.map((suggestion, index) => (
-                <Card key={index} className="bg-secondary/30">
+                <Card key={index} className="bg-card border shadow-sm">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-base">Suggestion {index + 1}</CardTitle>
+                    <CardTitle className="text-base text-card-foreground">Suggestion {index + 1}</CardTitle>
                     <CardDescription>Tone: {suggestion.tone}</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-sm mb-2">{suggestion.messageText}</p>
+                    <p className="text-sm mb-2 text-foreground">{suggestion.messageText}</p>
                     <p className="text-xs text-muted-foreground mb-2">Image Keywords: {suggestion.suggestedImageKeywords}</p>
                     <Button onClick={() => handleUseTemplate(suggestion.messageText)} size="sm" variant="outline">
                       <Copy className="mr-2 h-3 w-3" /> Use this template
@@ -233,10 +239,10 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
           )}
 
           <div>
-            <Label htmlFor="finalMessageTemplate">Final Message Template (must include <code className="bg-muted px-1 rounded text-xs">{`{{customerName}}`}</code>)</Label>
+            <Label htmlFor="finalMessageTemplateDialog">Final Message Template (must include {`{{customerName}}`})</Label>
             <Textarea
-              id="finalMessageTemplate"
-              placeholder="e.g., Hi {{customerName}}, don't miss our special event!"
+              id="finalMessageTemplateDialog"
+              placeholder="e.g., Hi {{customerName}}, don't miss out!"
               value={finalMessageTemplate}
               onChange={(e) => setFinalMessageTemplate(e.target.value)}
               rows={3}
@@ -268,5 +274,3 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
     </Dialog>
   );
 }
-
-    
