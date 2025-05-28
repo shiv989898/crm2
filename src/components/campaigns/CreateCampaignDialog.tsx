@@ -15,13 +15,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { MOCK_CAMPAIGNS } from "@/lib/mockData"; // For demo: adding to mock data
+import { MOCK_CAMPAIGNS } from "@/lib/mockData"; 
+import { startCampaignProcessingAction } from "@/app/(authenticated)/campaigns/actions";
+import { Loader2 } from "lucide-react";
 
 interface CreateCampaignDialogProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
   audience: Audience;
-  onCampaignCreated: (campaignName: string) => void; // Callback after campaign creation
+  onCampaignCreated: (campaignName: string) => void; 
 }
 
 export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaignCreated }: CreateCampaignDialogProps) {
@@ -29,41 +31,82 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
 
-  const handleCreateCampaign = () => {
+  const handleCreateCampaign = async () => {
     if (!campaignName.trim()) {
       toast({ title: "Campaign Name Required", description: "Please enter a name for your campaign.", variant: "destructive" });
       return;
     }
     setIsProcessing(true);
 
-    // Simulate campaign creation and logging
-    // In a real app, this would involve backend calls
-    setTimeout(() => {
-      const newCampaign: Campaign = {
-        id: `camp-${Date.now()}`,
-        name: campaignName,
-        audienceId: audience.id,
-        audienceName: audience.name,
-        audienceSize: Math.floor(Math.random() * 1000) + 50, // Mock audience size
-        createdAt: new Date().toISOString(),
-        status: "Pending", // Initial status
-        sentCount: 0,
-        failedCount: 0,
-      };
+    const newCampaign: Campaign = {
+      id: `camp-${Date.now()}`,
+      name: campaignName,
+      audienceId: audience.id,
+      audienceName: audience.name,
+      audienceSize: Math.floor(Math.random() * 91) + 10, // Mock audience size (10-100)
+      createdAt: new Date().toISOString(),
+      status: "Pending", 
+      sentCount: 0,
+      failedCount: 0,
+      processedCount: 0,
+    };
 
-      // For demo: add to mock campaigns (this won't persist or update lists in other components without state management)
-      MOCK_CAMPAIGNS.unshift(newCampaign); 
-      console.log("New campaign created (mock):", newCampaign);
+    MOCK_CAMPAIGNS.unshift(newCampaign); 
+    
+    toast({
+      title: "Campaign Initiated!",
+      description: `Campaign "${newCampaign.name}" has been created and is queued for processing.`,
+    });
+    
+    onOpenChange(false); // Close dialog
+
+    try {
+      // This action updates the campaign status to 'Processing' and simulates message sending
+      await startCampaignProcessingAction(newCampaign.id);
       
-      onCampaignCreated(campaignName); // Call the callback
-      setIsProcessing(false);
-      onOpenChange(false); // Close dialog
-      setCampaignName(`Campaign for ${audience.name}`); // Reset for next time
-    }, 1500); // Simulate delay
+      // Toast after action is called, actual processing is "background"
+      toast({
+        title: "Campaign Processing Started",
+        description: `"${newCampaign.name}" is now being processed. Check the dashboard for updates.`,
+        variant: "default",
+      });
+      onCampaignCreated(newCampaign.name); // Callback
+    } catch (error) {
+      console.error("Error starting campaign processing:", error);
+      toast({
+        title: "Processing Error",
+        description: "Could not start campaign processing. The campaign may be marked as Failed.",
+        variant: "destructive",
+      });
+      // Update status in MOCK_CAMPAIGNS if starting failed
+      const campaignInMock = MOCK_CAMPAIGNS.find(c => c.id === newCampaign.id);
+      if (campaignInMock) {
+        campaignInMock.status = "Failed";
+      }
+    } finally {
+      setIsProcessing(false); 
+      // Reset name for next time dialog opens, if dialog is reused for different audiences.
+      // If audience prop changes, this component might re-render and reset state naturally.
+      // setCampaignName(`Campaign for ${audience.name}`); // Or handle in useEffect if audience changes
+    }
   };
+  
+  // Reset campaign name if audience changes while dialog is mounted (though unlikely for this pattern)
+  // Or more simply, when dialog re-opens for a new audience. This is handled by onOpenChange.
+  React.useEffect(() => {
+    if (isOpen) {
+      setCampaignName(`Campaign for ${audience.name}`);
+    }
+  }, [isOpen, audience.name]);
+
 
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open) {
+        setIsProcessing(false); // Reset processing state if dialog is closed externally
+      }
+      onOpenChange(open);
+    }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Create New Campaign</DialogTitle>
@@ -97,8 +140,15 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isProcessing}>
             Cancel
           </Button>
-          <Button type="submit" onClick={handleCreateCampaign} disabled={isProcessing} className="bg-primary hover:bg-primary/90 text-primary-foreground">
-            {isProcessing ? "Processing..." : "Launch Campaign"}
+          <Button type="submit" onClick={handleCreateCampaign} disabled={isProcessing} className="bg-primary hover:bg-primary/90 text-primary-foreground w-[160px]">
+            {isProcessing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Launching...
+              </>
+            ) : (
+              "Launch Campaign"
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

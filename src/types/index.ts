@@ -15,6 +15,14 @@ export type Audience = {
   description?: string; // Optional description, possibly from NLP
 };
 
+export type CampaignStatus = 
+  | 'Sent' 
+  | 'Failed' 
+  | 'Pending' 
+  | 'Draft' 
+  | 'Processing' 
+  | 'CompletedWithFailures';
+
 export type Campaign = {
   id:string;
   name: string;
@@ -22,9 +30,10 @@ export type Campaign = {
   audienceName: string; // Name of the Audience
   audienceSize: number;
   createdAt: string; // ISO string
-  status: 'Sent' | 'Failed' | 'Pending' | 'Draft';
+  status: CampaignStatus;
   sentCount: number;
   failedCount: number;
+  processedCount?: number; // Number of messages that have reached a final state (Sent/Failed)
 };
 
 export type UserProfile = {
@@ -32,4 +41,14 @@ export type UserProfile = {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+};
+
+export type CommunicationLogEntry = {
+  logId: string;
+  campaignId: string;
+  customerId: string; // Mock customer ID
+  customerName: string; // Mock customer name for personalized message
+  message: string;
+  status: 'Pending' | 'Sent' | 'Failed';
+  timestamp: string; // ISO string
 };

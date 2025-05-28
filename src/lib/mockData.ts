@@ -1,5 +1,5 @@
 
-import type { Campaign, Audience } from "@/types";
+import type { Campaign, Audience, CommunicationLogEntry } from "@/types";
 
 export const MOCK_AUDIENCES: Audience[] = [
   { id: 'aud1', name: 'High Spenders', rules: [], createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() },
@@ -17,7 +17,8 @@ export const MOCK_CAMPAIGNS: Campaign[] = [
     createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(), 
     status: 'Sent', 
     sentCount: 1150, 
-    failedCount: 50 
+    failedCount: 50,
+    processedCount: 1200,
   },
   { 
     id: 'camp2', 
@@ -28,7 +29,8 @@ export const MOCK_CAMPAIGNS: Campaign[] = [
     createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), 
     status: 'Sent', 
     sentCount: 480, 
-    failedCount: 20 
+    failedCount: 20,
+    processedCount: 500,
   },
   { 
     id: 'camp3', 
@@ -39,7 +41,8 @@ export const MOCK_CAMPAIGNS: Campaign[] = [
     createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), 
     status: 'Failed', 
     sentCount: 0, 
-    failedCount: 750 
+    failedCount: 750,
+    processedCount: 750,
   },
   { 
     id: 'camp4', 
@@ -50,6 +53,9 @@ export const MOCK_CAMPAIGNS: Campaign[] = [
     createdAt: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(), 
     status: 'Draft', 
     sentCount: 0, 
-    failedCount: 0 
+    failedCount: 0,
+    processedCount: 0,
   },
 ];
+
+export const MOCK_COMMUNICATION_LOGS: CommunicationLogEntry[] = [];
