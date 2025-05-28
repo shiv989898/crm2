@@ -11,7 +11,8 @@ import {
   SidebarContent, 
   SidebarFooter, 
   SidebarInset,
-  SidebarTrigger
+  SidebarTrigger,
+  SidebarMenuButton // Added import for consistency if used directly
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { PanelLeft, Settings } from "lucide-react";
@@ -35,10 +36,18 @@ export function AppShell({ children }: AppShellProps) {
           <MainNav />
         </SidebarContent>
         <SidebarFooter className="p-2">
-          <Button variant="ghost" className="w-full justify-start gap-2 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
-            <Settings className="h-5 w-5" />
-            <span className="group-data-[collapsible=icon]:hidden">Settings</span>
-          </Button>
+          <Link href="/settings" passHref legacyBehavior>
+            <SidebarMenuButton 
+              asChild 
+              className="justify-start w-full hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              tooltip={{ children: "Settings", className: "bg-popover text-popover-foreground" }}
+            >
+              <a> {/* <a> tag is needed for NextLink */}
+                <Settings className="h-5 w-5" />
+                <span className="group-data-[collapsible=icon]:hidden">Settings</span>
+              </a>
+            </SidebarMenuButton>
+          </Link>
         </SidebarFooter>
       </Sidebar>
       
