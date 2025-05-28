@@ -6,15 +6,9 @@ import './globals.css';
 import { AppProviders } from '@/providers/AppProviders';
 import { cn } from '@/lib/utils';
 
-const geistSans = GeistSans({
-  variable: '--font-geist-sans',
-  subsets: ['latin'],
-});
-
-const geistMono = GeistMono({
-  variable: '--font-geist-mono',
-  subsets: ['latin'],
-});
+// These are now functions and should be called
+const geistSans = GeistSans;
+const geistMono = GeistMono;
 
 export const metadata: Metadata = {
   title: 'Nexus CRM',
