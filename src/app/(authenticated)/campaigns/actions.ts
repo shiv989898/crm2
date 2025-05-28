@@ -44,27 +44,39 @@ export async function deliveryReceiptAction(logId: string, deliveryStatus: 'Sent
   // If not all processed and status is already 'Processing', it remains 'Processing'
 }
 
-export async function startCampaignProcessingAction(campaignId: string) {
-  const campaign = MOCK_CAMPAIGNS.find(c => c.id === campaignId);
+export async function startCampaignProcessingAction(campaignToProcess: Campaign) {
+  // Ensure the campaign is in the server-side MOCK_CAMPAIGNS array.
+  // The campaignToProcess object comes from the client and has its initial state (e.g., status "Pending").
+  let campaign = MOCK_CAMPAIGNS.find(c => c.id === campaignToProcess.id);
+
   if (!campaign) {
-    console.error(`Campaign ${campaignId} not found for processing.`);
-    throw new Error(`Campaign ${campaignId} not found.`);
+    MOCK_CAMPAIGNS.unshift(campaignToProcess); // Add the received campaign object
+    campaign = campaignToProcess; // Work with the object we just added
+  } else {
+    // If it somehow already existed, update its properties from campaignToProcess
+    // to ensure we're starting from the state defined by the client (e.g. name, audience details)
+    // and reset processing specific counts.
+    Object.assign(campaign, campaignToProcess);
   }
 
-  if (campaign.status === 'Processing' || campaign.status === 'Sent' || campaign.status === 'Failed' || campaign.status === 'CompletedWithFailures') {
-    console.warn(`Campaign ${campaignId} is already processing or has completed. Current status: ${campaign.status}`);
-    // Potentially return early or re-evaluate if re-processing is allowed/meaningful
-    // For now, let's allow it to reset and re-process for demo purposes if it was e.g. Draft/Pending
-  }
-  
-  campaign.status = 'Processing';
+  // Ensure the campaign object *in the MOCK_CAMPAIGNS array* has its status and counts reset/set correctly for processing.
+  campaign.status = "Pending"; // Explicitly set/confirm status for the instance in server's MOCK_CAMPAIGNS
   campaign.processedCount = 0;
   campaign.sentCount = 0;
   campaign.failedCount = 0;
+  
+  // Now, begin actual processing logic
+  if (campaign.status === 'Processing' || campaign.status === 'Sent' || campaign.status === 'Failed' || campaign.status === 'CompletedWithFailures') {
+    console.warn(`Campaign ${campaign.id} was already processing or has completed. Current status: ${campaign.status}. Re-initializing processing.`);
+    // Allow it to reset and re-process for demo purposes
+  }
+  
+  campaign.status = 'Processing'; // Set to Processing
+  // Counts already reset above.
 
   // Clear previous logs for this campaign if re-processing
   const existingLogIndexes = MOCK_COMMUNICATION_LOGS.reduce((acc, log, index) => {
-    if (log.campaignId === campaignId) {
+    if (log.campaignId === campaign!.id) {
       acc.push(index);
     }
     return acc;
@@ -92,7 +104,7 @@ export async function startCampaignProcessingAction(campaignId: string) {
       customerId,
       customerName,
       message,
-      status: 'Pending',
+      status: 'Pending', // Initial log status
       timestamp: new Date().toISOString(),
     };
     MOCK_COMMUNICATION_LOGS.push(logEntry);
@@ -116,20 +128,15 @@ export async function startCampaignProcessingAction(campaignId: string) {
     processingPromises.push(promise);
   }
 
-  // Await all individual message processing simulations to complete
-  // This ensures that by the time startCampaignProcessingAction resolves (if awaited by client),
-  // all deliveryReceiptAction calls have been made.
-  // However, the UI will show "Processing" immediately.
   Promise.allSettled(processingPromises).then(results => {
-    console.log(`All simulated messages for campaign ${campaignId} have been dispatched for processing.`);
+    console.log(`All simulated messages for campaign ${campaign!.id} have been dispatched for processing.`);
     results.forEach((result, index) => {
       if (result.status === 'rejected') {
-        console.error(`Processing for message index ${index} in campaign ${campaignId} failed:`, result.reason);
+        console.error(`Processing for message index ${index} in campaign ${campaign!.id} failed:`, result.reason);
       }
     });
     // Final status check for the campaign, in case some deliveryReceiptActions didn't run or failed.
-    // This is a safety net, primary logic is in deliveryReceiptAction.
-    const finalCampaignState = MOCK_CAMPAIGNS.find(c => c.id === campaignId);
+    const finalCampaignState = MOCK_CAMPAIGNS.find(c => c.id === campaign!.id);
     if (finalCampaignState && finalCampaignState.processedCount === finalCampaignState.audienceSize && finalCampaignState.status === 'Processing') {
         if (finalCampaignState.failedCount === 0) {
             finalCampaignState.status = 'Sent';
@@ -138,13 +145,11 @@ export async function startCampaignProcessingAction(campaignId: string) {
         } else {
             finalCampaignState.status = 'CompletedWithFailures';
         }
-        console.log(`Campaign ${campaignId} final status updated after allSettled: ${finalCampaignState.status}`);
+        console.log(`Campaign ${campaign!.id} final status updated after allSettled: ${finalCampaignState.status}`);
     }
   }).catch(error => {
-    // This catch is for Promise.allSettled itself, which shouldn't happen.
-    console.error(`Unexpected error in Promise.allSettled for campaign ${campaignId}:`, error);
+    console.error(`Unexpected error in Promise.allSettled for campaign ${campaign!.id}:`, error);
   });
 
-  // Returns quickly, letting the processing happen in the "background"
-  console.log(`Campaign ${campaignId} processing started. ${campaign.audienceSize} messages queued.`);
+  console.log(`Campaign ${campaign.id} processing started. ${campaign.audienceSize} messages queued.`);
 }

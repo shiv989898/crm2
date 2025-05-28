@@ -51,6 +51,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       processedCount: 0,
     };
 
+    // Client-side update for immediate UI reflection if needed, though server action will also add it.
     MOCK_CAMPAIGNS.unshift(newCampaign); 
     
     toast({
@@ -61,10 +62,9 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
     onOpenChange(false); // Close dialog
 
     try {
-      // This action updates the campaign status to 'Processing' and simulates message sending
-      await startCampaignProcessingAction(newCampaign.id);
+      // Pass the entire newCampaign object to the server action
+      await startCampaignProcessingAction(newCampaign);
       
-      // Toast after action is called, actual processing is "background"
       toast({
         title: "Campaign Processing Started",
         description: `"${newCampaign.name}" is now being processed. Check the dashboard for updates.`,
@@ -75,7 +75,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       console.error("Error starting campaign processing:", error);
       toast({
         title: "Processing Error",
-        description: "Could not start campaign processing. The campaign may be marked as Failed.",
+        description: `Could not start campaign processing for "${newCampaign.name}". The campaign may be marked as Failed. Error: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
       // Update status in MOCK_CAMPAIGNS if starting failed
@@ -85,14 +85,9 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       }
     } finally {
       setIsProcessing(false); 
-      // Reset name for next time dialog opens, if dialog is reused for different audiences.
-      // If audience prop changes, this component might re-render and reset state naturally.
-      // setCampaignName(`Campaign for ${audience.name}`); // Or handle in useEffect if audience changes
     }
   };
   
-  // Reset campaign name if audience changes while dialog is mounted (though unlikely for this pattern)
-  // Or more simply, when dialog re-opens for a new audience. This is handled by onOpenChange.
   useEffect(() => {
     if (isOpen) {
       setCampaignName(`Campaign for ${audience.name}`);
@@ -103,7 +98,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
       if (!open) {
-        setIsProcessing(false); // Reset processing state if dialog is closed externally
+        setIsProcessing(false); 
       }
       onOpenChange(open);
     }}>
