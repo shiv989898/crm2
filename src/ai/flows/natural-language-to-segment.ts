@@ -25,7 +25,7 @@ const NaturalLanguageToSegmentOutputSchema = z.object({
   segmentRules: z
     .string()
     .describe(
-      'The corresponding segment rules in a logical JSON format (e.g., a JSON object with filter conditions).'
+      'A JSON STRING. When this string is parsed, it MUST result in an object like: `{"conditions": [{"attribute": "...", "operator": "...", "value": "..."}, ...]}`. See examples in the main prompt.'
     ),
   suggestedAudienceName: z
     .string()
@@ -96,6 +96,7 @@ Output:
 Based on the description: "{{naturalLanguageDescription}}", generate the JSON output including segmentRules (as a JSON string), suggestedAudienceName, and suggestedAudienceDescription.
 Ensure the generated JSON is valid and strictly follows the specified structure, including correct value types (number, boolean, string) within the segmentRules.
 The segmentRules value MUST be a stringified JSON.
+Pay close attention to the examples provided, as they demonstrate the exact output format and data types required for each field. Strive for accuracy in translating the user's intent into logical rules.
 `,
 });
 
