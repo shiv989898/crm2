@@ -3,24 +3,30 @@
 
 import type { Campaign } from "@/types";
 import { CampaignCard } from "./CampaignCard";
-import { MOCK_CAMPAIGNS } from "@/lib/mockData"; // We'll create this file
+import { getCampaignsAction } from "@/app/(authenticated)/campaigns/actions"; // Import the server action
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"; // Added import
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 
 export function CampaignList() {
-  // In a real app, this data would come from an API
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Simulate API call
-    setTimeout(() => {
-      const sortedCampaigns = MOCK_CAMPAIGNS.sort((a, b) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setCampaigns(sortedCampaigns);
-      setIsLoading(false);
-    }, 500); 
+    async function fetchCampaigns() {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const fetchedCampaigns = await getCampaignsAction();
+        setCampaigns(fetchedCampaigns);
+      } catch (err) {
+        console.error("Failed to fetch campaigns:", err);
+        setError("Failed to load campaigns. Please try again.");
+      } finally {
+        setIsLoading(false);
+      }
+    }
+    fetchCampaigns();
   }, []);
 
   if (isLoading) {
@@ -43,6 +49,10 @@ export function CampaignList() {
         ))}
       </div>
     );
+  }
+
+  if (error) {
+    return <p className="text-center text-destructive">{error}</p>;
   }
   
   if (campaigns.length === 0) {
@@ -68,4 +78,3 @@ export function CampaignList() {
   animation: fadeIn 0.5s ease-out forwards;
 }
 */
-

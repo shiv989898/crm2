@@ -5,6 +5,14 @@ import { MOCK_CAMPAIGNS, MOCK_COMMUNICATION_LOGS } from '@/lib/mockData';
 import type { Campaign, CommunicationLogEntry, CampaignStatus } from '@/types';
 import { generateCampaignMessages, type GenerateCampaignMessagesInput, type GenerateCampaignMessagesOutput } from '@/ai/flows/generate-campaign-messages-flow';
 
+export async function getCampaignsAction(): Promise<Campaign[]> {
+  // Return a copy and sort to avoid unintended mutations and ensure consistent order
+  const sortedCampaigns = [...MOCK_CAMPAIGNS].sort((a, b) => 
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+  return sortedCampaigns;
+}
+
 // This function is called by the "dummy vendor API" simulation
 export async function deliveryReceiptAction(logId: string, deliveryStatus: 'Sent' | 'Failed') {
   const logEntry = MOCK_COMMUNICATION_LOGS.find(log => log.logId === logId);
@@ -121,16 +129,12 @@ export async function startCampaignProcessingAction(campaignToProcess: Campaign)
     processingPromises.push(promise);
   }
 
-  // Wait for all simulated dispatches to complete their "vendor processing"
   // The actual status update to "Sent", "Failed", or "CompletedWithFailures"
-  // is now solely handled by deliveryReceiptAction as each message is processed.
+  // is solely handled by deliveryReceiptAction as each message is processed.
   Promise.allSettled(processingPromises).then(results => {
     console.log(`All simulated messages for campaign ${campaign!.id} have been dispatched for processing and their simulated vendor calls initiated.`);
-    // No need to update campaign status here, deliveryReceiptAction handles it incrementally.
   }).catch(error => {
     console.error(`Unexpected error in Promise.allSettled for campaign ${campaign!.id}:`, error);
-    // Potentially set campaign to an error state if the overall dispatch process fails critically
-    // For now, individual message failures are handled by deliveryReceiptAction.
   });
 
   console.log(`Campaign ${campaign.id} processing initiated. ${campaign.audienceSize} messages queued.`);
