@@ -199,8 +199,8 @@ export async function startCampaignProcessingAction(
         let firestoreLogId: string | null = null;
         try {
           console.log(`[startCampaignProcessingAction LOOP ${i+1}/${campaignToProcess.audienceSize}] Attempting to ADD log to Firestore. Campaign ${campaignId}. Data:`, JSON.stringify(logEntry) + `. Timestamp: ${new Date().toISOString()}`);
-          const logDocRef Firestore = await addDoc(collection(db, COMMUNICATION_LOGS_COLLECTION), logEntry);
-          firestoreLogId = logDocRef Firestore.id;
+          const logDocRef = await addDoc(collection(db, COMMUNICATION_LOGS_COLLECTION), logEntry);
+          firestoreLogId = logDocRef.id;
           console.log(`[startCampaignProcessingAction LOOP ${i+1}/${campaignToProcess.audienceSize} SUCCESS] Log (ID: ${firestoreLogId}) ADDED. Timestamp: ${new Date().toISOString()}`);
 
           await new Promise(r => setTimeout(r, Math.random() * 150 + 50)); 
@@ -263,3 +263,4 @@ export async function generateCampaignMessagesAction(
     return []; 
   }
 }
+
