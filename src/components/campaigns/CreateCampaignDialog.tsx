@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { Audience, Campaign } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
@@ -93,7 +93,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
   
   // Reset campaign name if audience changes while dialog is mounted (though unlikely for this pattern)
   // Or more simply, when dialog re-opens for a new audience. This is handled by onOpenChange.
-  React.useEffect(() => {
+  useEffect(() => {
     if (isOpen) {
       setCampaignName(`Campaign for ${audience.name}`);
     }
