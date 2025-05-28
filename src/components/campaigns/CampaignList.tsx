@@ -18,17 +18,24 @@ export function CampaignList() {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // notifiedCampaignIds will store IDs of campaigns for which a notification has already been shown or processed.
   const [notifiedCampaignIds, setNotifiedCampaignIds] = useState<Set<string>>(new Set());
+  // initialLoadComplete flags whether the first snapshot has been processed.
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
 
   useEffect(() => {
+    // console.log(`[CampaignList Effect] Running. User: ${user?.uid}, InitialLoad: ${initialLoadComplete}, Notified Count: ${notifiedCampaignIds.size}`);
+
     if (!db) {
       setError("Firestore is not initialized. Cannot fetch campaigns.");
       setIsLoading(false);
       return;
     }
     if (!user) {
-      // Don't try to fetch if user is not yet loaded or logged out
-      setIsLoading(false); // Or true if you want a loader until user is available
+      // User not loaded yet, or logged out. Clear campaigns and wait.
+      setCampaigns([]);
+      setIsLoading(false); // Not loading if no user.
       return;
     }
 
@@ -39,52 +46,74 @@ export function CampaignList() {
     
     const unsubscribe = onSnapshot(campaignsQuery, 
       (querySnapshot: QuerySnapshot<DocumentData>) => {
-        const fetchedCampaigns: Campaign[] = [];
-        let newCampaignsForNotification: Campaign[] = [];
-
+        // console.log(`[CampaignList Snapshot] Received ${querySnapshot.docs.length} docs. InitialLoad: ${initialLoadComplete}`);
+        const currentCampaignsData: Campaign[] = [];
         querySnapshot.forEach((doc) => {
-          const campaignData = { id: doc.id, ...doc.data() } as Campaign;
-          fetchedCampaigns.push(campaignData);
-
-          // Check for notification: new campaign not created by current user
-          if (
-            campaignData.createdByUserId &&
-            campaignData.createdByUserId !== user.uid &&
-            !notifiedCampaignIds.has(campaignData.id)
-          ) {
-            // Heuristic: consider "new" if created in the last few minutes, or simply if ID is new to this session
-            // This simple check only notifies once per campaign ID per session/load
-            newCampaignsForNotification.push(campaignData);
-          }
+          currentCampaignsData.push({ id: doc.id, ...doc.data() } as Campaign);
         });
 
-        setCampaigns(fetchedCampaigns);
-        setIsLoading(false);
-
-        if (newCampaignsForNotification.length > 0) {
-          const updatedNotifiedIds = new Set(notifiedCampaignIds);
-          newCampaignsForNotification.forEach(camp => {
-            toast({
-              title: "New Campaign Launched",
-              description: `Campaign "${camp.name}" was just launched by another user.`,
-              variant: "default", // Or a custom 'info' variant if you have one
-            });
-            updatedNotifiedIds.add(camp.id);
+        if (!initialLoadComplete) {
+          // This is the first snapshot after component mounts or user changes.
+          // Populate campaigns and mark all current campaign IDs as "notified" to prevent toasting for existing items.
+          setCampaigns(currentCampaignsData);
+          const idsFromFirstLoad = new Set(currentCampaignsData.map(c => c.id));
+          setNotifiedCampaignIds(idsFromFirstLoad);
+          setInitialLoadComplete(true); // Mark initial load as complete
+          // console.log(`[CampaignList Snapshot] Initial load processed. ${idsFromFirstLoad.size} campaigns marked as notified initially.`);
+        } else {
+          // Initial load is complete, now check for new campaigns to notify about.
+          const newNotificationsToShow: Campaign[] = [];
+          currentCampaignsData.forEach(campaign => {
+            if (
+              campaign.createdByUserId &&
+              campaign.createdByUserId !== user.uid && // Campaign created by another user
+              !notifiedCampaignIds.has(campaign.id)     // We haven't notified for this campaign ID yet
+            ) {
+              newNotificationsToShow.push(campaign);
+              // console.log(`[CampaignList Snapshot] Queued for notification: ${campaign.name} (ID: ${campaign.id})`);
+            }
           });
-          setNotifiedCampaignIds(updatedNotifiedIds);
+
+          if (newNotificationsToShow.length > 0) {
+            const updatedNotifiedIds = new Set(notifiedCampaignIds); // Create a new set from the current state
+            newNotificationsToShow.forEach(camp => {
+              // console.log(`[CampaignList Snapshot] Toasting for: ${camp.name}`);
+              toast({
+                title: "New Campaign Launched",
+                description: `Campaign "${camp.name}" was just launched by another user.`,
+                variant: "default",
+              });
+              updatedNotifiedIds.add(camp.id); // Add to the new set
+            });
+            setNotifiedCampaignIds(updatedNotifiedIds); // Update state with the new set
+          }
+          setCampaigns(currentCampaignsData); // Always update the displayed campaigns
         }
+        setIsLoading(false);
       }, 
       (err) => {
-        console.error("Failed to subscribe to campaign updates:", err);
+        console.error("[CampaignList Snapshot ERROR] Failed to subscribe to campaign updates:", err);
         setError("Failed to load campaigns in real-time. Please try again.");
         setIsLoading(false);
       }
     );
 
-    // Cleanup listener on component unmount
-    return () => unsubscribe();
-
-  }, [user, toast, notifiedCampaignIds]); // Add dependencies
+    // Cleanup listener on component unmount or when dependencies change
+    return () => {
+      // console.log("[CampaignList Effect Cleanup] Unsubscribing listener.");
+      unsubscribe();
+      // Optionally reset initialLoadComplete if user logs out and back in,
+      // so the "initial load" logic runs again for the new session.
+      // This happens naturally if `user` change causes a full unmount/remount
+      // or if `initialLoadComplete` is reset when `user` becomes null.
+      // For now, `initialLoadComplete` persists for the component's lifetime unless `user` changes significantly.
+    };
+  // Key dependencies:
+  // - `user`: If user changes, we need to re-subscribe with the new user context.
+  // - `toast`: Stable function from useToast.
+  // - `notifiedCampaignIds`: The snapshot callback needs the latest version of this Set to correctly determine if a notification is needed.
+  // - `initialLoadComplete`: The logic within the snapshot callback depends on this flag.
+  }, [user, toast, notifiedCampaignIds, initialLoadComplete]); 
 
   if (isLoading) {
     return (
@@ -113,7 +142,11 @@ export function CampaignList() {
     return <p className="text-center text-destructive py-10">{error}</p>;
   }
   
-  if (campaigns.length === 0) {
+  if (!user && !isLoading) { // If there's no user and we are not loading, it means user is logged out or auth hasn't kicked in.
+    return <p className="text-center text-muted-foreground py-10">Please sign in to view campaigns.</p>;
+  }
+
+  if (campaigns.length === 0 && initialLoadComplete) { // Check initialLoadComplete to distinguish from initial loading state
     return <p className="text-center text-muted-foreground py-10">No campaigns found. Why not create one?</p>;
   }
 
