@@ -15,22 +15,48 @@ interface NlpSegmentToolProps {
 }
 
 // Helper to map AI response to SegmentRule[]
-// This is a simplified mapper and might need to be more robust
 const mapAiResponseToRules = (aiJsonString: string): SegmentRule[] => {
   try {
     const parsed = JSON.parse(aiJsonString);
     if (parsed.conditions && Array.isArray(parsed.conditions)) {
-      return parsed.conditions.map((cond: any, index: number) => ({
-        id: `ai-${Date.now()}-${index}`,
-        field: cond.attribute || '',
-        operator: cond.operator || '',
-        value: cond.value || '',
-        // Default to AND for AI generated rules for simplicity initially
-        logicalOperator: index > 0 ? 'AND' : undefined, 
-      }));
+      const conditions = parsed.conditions as Array<any>; // Type assertion for clarity
+      return conditions.map((cond, index) => {
+        let finalLogicalOperator: 'AND' | 'OR' | undefined = undefined;
+        // A logicalOperator connects the current rule to the PREVIOUS one.
+        // It's only applicable if this is not the first rule.
+        if (index > 0) { 
+          if (cond.logicalOperator === 'AND' || cond.logicalOperator === 'OR') {
+            finalLogicalOperator = cond.logicalOperator;
+          } else {
+            // Default to AND if AI omits it for a non-first rule.
+            // The AI is instructed to provide it for non-first rules.
+            finalLogicalOperator = 'AND'; 
+          }
+        }
+
+        // Handle value: boolean and number must be preserved. Default to string or empty string.
+        let valueToSet: string | number | boolean | Date = ''; // Date type is for internal SegmentRule, AI usually provides string for dates.
+        if (typeof cond.value === 'boolean') {
+          valueToSet = cond.value;
+        } else if (typeof cond.value === 'number') {
+          valueToSet = cond.value;
+        } else if (cond.value !== undefined && cond.value !== null) {
+          valueToSet = String(cond.value); // Covers dates (e.g., "YYYY-MM-DD", "30 days ago") and other text values
+        }
+        // If cond.value is explicitly an empty string, it will be preserved here.
+
+        return {
+          id: `ai-${Date.now()}-${index}`,
+          field: cond.attribute || '',
+          operator: cond.operator || '',
+          value: valueToSet,
+          logicalOperator: finalLogicalOperator,
+        };
+      });
     }
   } catch (error) {
     console.error("Error parsing AI response:", error);
+    // The calling function will show a toast if this returns an empty array.
   }
   return [];
 };
@@ -55,14 +81,15 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
           onRulesGenerated(generatedRules, prompt);
           toast({ title: "Success!", description: "Segment rules generated from your description." });
         } else {
-          toast({ title: "Parsing Error", description: "Could not parse rules from AI response. Please try a different prompt or refine manually.", variant: "destructive" });
+          // This can be hit if mapAiResponseToRules returns [] due to parsing error or empty conditions
+          toast({ title: "AI Response Issue", description: "Could not effectively parse rules from AI response. The response might be empty or malformed. Please try a different prompt or refine rules manually.", variant: "destructive" });
         }
       } else {
-        toast({ title: "AI Error", description: "Failed to generate rules. Please try again.", variant: "destructive" });
+        toast({ title: "AI Error", description: "Failed to generate rules. The AI returned no segment rule data. Please try again.", variant: "destructive" });
       }
     } catch (error) {
-      console.error("Error calling AI:", error);
-      toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+      console.error("Error calling AI action:", error);
+      toast({ title: "Error", description: `An unexpected error occurred: ${error instanceof Error ? error.message : String(error)}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -87,7 +114,7 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
           rows={3}
           disabled={isLoading}
         />
-        <Button onClick={handleSubmit} disabled={isLoading} className="w-full sm:w-auto">
+        <Button onClick={handleSubmit} disabled={isLoading || !prompt.trim()} className="w-full sm:w-auto">
           {isLoading ? (
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           ) : (
@@ -99,3 +126,4 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
     </Card>
   );
 }
+
