@@ -21,6 +21,7 @@ import { startCampaignProcessingAction, generateCampaignMessagesAction } from "@
 import { Loader2, Wand2, Sparkles, Copy } from "lucide-react";
 import type { GenerateCampaignMessagesOutput } from "@/ai/flows/generate-campaign-messages-flow";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useRouter } from "next/navigation"; // Added import
 
 
 interface CreateCampaignDialogProps {
@@ -41,6 +42,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
   const [isGeneratingMessages, setIsGeneratingMessages] = useState(false);
   const [isLaunching, setIsLaunching] = useState(false);
   const { toast } = useToast();
+  const router = useRouter(); // Initialize router
 
   useEffect(() => {
     if (isOpen) {
@@ -94,7 +96,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       return;
     }
      if (!finalMessageTemplate.toLowerCase().includes("{{customername}}")) {
-      toast({ title: "Missing Placeholder", description: "The final message template must include {{customerName}} for personalization.", variant: "destructive" });
+      toast({ title: "Missing Placeholder", description: `The final message template must include {{customerName}} for personalization.`, variant: "destructive" });
       return;
     }
 
@@ -114,17 +116,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       objective: campaignObjective,
       messageTemplate: finalMessageTemplate,
     };
-
-    // MOCK_CAMPAIGNS.unshift(newCampaign); // This update is client-side only and server action won't see it directly.
-                                        // Server action startCampaignProcessingAction will handle adding it to its mock data.
-
-    toast({
-      title: "Campaign Initiated!",
-      description: `Campaign "${newCampaign.name}" is queued for processing.`,
-    });
-
-    onOpenChange(false); // Close dialog
-
+    
     try {
       // Pass the entire campaign object to the server action
       await startCampaignProcessingAction(newCampaign); 
@@ -132,7 +124,9 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
         title: "Campaign Processing Started",
         description: `"${newCampaign.name}" is now being processed. Check dashboard for updates.`,
       });
-      onCampaignCreated(newCampaign.name);
+      onCampaignCreated(newCampaign.name); // Call the callback passed from AudienceBuilderForm
+      onOpenChange(false); // Close dialog
+      router.push('/dashboard'); // Navigate to dashboard
     } catch (error) {
       console.error("Error starting campaign processing:", error);
       toast({
@@ -142,16 +136,8 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       });
       // Update the MOCK_CAMPAIGNS on the client-side if the server action fails,
       // so the UI reflects the failure state.
-      const campaignInMock = MOCK_CAMPAIGNS.find(c => c.id === newCampaign.id);
-      if (campaignInMock) {
-        campaignInMock.status = "Failed";
-      } else {
-        // If it wasn't even added because processing failed very early
-        // MOCK_CAMPAIGNS.unshift({...newCampaign, status: "Failed"}); // Add it as failed
-      }
-      // To ensure the campaign list updates if it's already rendered on the dashboard:
-      // This would typically involve a state management solution or re-fetching.
-      // For now, relying on page navigation or manual refresh for the list to update.
+      // Note: This is tricky with server-side mock data. The action already tries to add/update server-side.
+      // For robust error handling, a real DB would be better.
     } finally {
       setIsLaunching(false);
     }
@@ -265,7 +251,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLaunching}>
             Cancel
           </Button>
-          <Button onClick={handleCreateCampaign} disabled={isLaunching || !finalMessageTemplate.trim()} className="bg-primary hover:bg-primary/90 text-primary-foreground w-[160px]">
+          <Button onClick={handleCreateCampaign} disabled={isLaunching || !finalMessageTemplate.trim() || !campaignName.trim()} className="bg-primary hover:bg-primary/90 text-primary-foreground w-[160px]">
             {isLaunching ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -280,3 +266,4 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
     </Dialog>
   );
 }
+
