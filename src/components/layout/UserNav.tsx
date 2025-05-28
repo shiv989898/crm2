@@ -14,19 +14,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/hooks/useAuth";
 import { LogOut, User as UserIcon } from "lucide-react";
+import Link from "next/link";
+import { getInitials } from "@/lib/utils";
 
 export function UserNav() {
   const { user, signOut } = useAuth();
 
   if (!user) {
     return null;
-  }
-
-  const getInitials = (name: string | null | undefined) => {
-    if (!name) return "U";
-    const names = name.split(' ');
-    if (names.length === 1) return names[0][0].toUpperCase();
-    return names[0][0].toUpperCase() + names[names.length - 1][0].toUpperCase();
   }
 
   return (
@@ -52,13 +47,17 @@ export function UserNav() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          <DropdownMenuItem>
-            <UserIcon className="mr-2 h-4 w-4" />
-            <span>Profile</span>
-          </DropdownMenuItem>
+          <Link href="/profile" passHref legacyBehavior>
+            <DropdownMenuItem asChild className="cursor-pointer">
+              <a> {/* <a> tag for proper styling and behavior with Link */}
+                <UserIcon className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </a>
+            </DropdownMenuItem>
+          </Link>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={signOut}>
+        <DropdownMenuItem onClick={signOut} className="cursor-pointer">
           <LogOut className="mr-2 h-4 w-4" />
           <span>Log out</span>
         </DropdownMenuItem>

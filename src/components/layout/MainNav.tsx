@@ -5,13 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SidebarMenu, SidebarMenuItem, SidebarMenuButton } from "@/components/ui/sidebar";
-import { LayoutDashboard, ListFilter, Users, Settings } from "lucide-react"; // Added Settings icon
+import { LayoutDashboard, ListFilter } from "lucide-react"; // Removed Settings icon
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/audience-builder", label: "Audience Builder", icon: ListFilter },
-  { href: "/settings", label: "Settings", icon: Settings },
-  // Add more items here
+  // { href: "/settings", label: "Settings", icon: Settings }, // This line is removed
 ];
 
 export function MainNav() {

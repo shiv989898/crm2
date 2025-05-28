@@ -6,7 +6,6 @@ import { createContext, useEffect, useState, ReactNode } from "react";
 import { auth, googleProvider } from "@/config/firebase";
 import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { Toaster } from "@/components/ui/toaster"; // Import Toaster
 
 export interface AuthContextType {
   user: User | null;
@@ -27,6 +26,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter();
 
   useEffect(() => {
+    if (!auth) {
+      console.error("Firebase Auth is not initialized. Check Firebase config.");
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       setLoading(false);
@@ -35,26 +39,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const signInWithGoogle = async () => {
+    if (!auth) {
+      console.error("Firebase Auth is not initialized for signInWithGoogle.");
+      return;
+    }
     setLoading(true);
     try {
       await signInWithPopup(auth, googleProvider);
-      // router.push("/dashboard"); // Let redirect logic handle this
+      // Successful sign-in will be handled by onAuthStateChanged
     } catch (error) {
       console.error("Error signing in with Google:", error);
-      // Handle error (e.g., show toast notification)
+      // Handle error (e.g., show toast notification via a toast service if integrated)
     } finally {
       setLoading(false);
     }
   };
 
   const signOut = async () => {
+    if (!auth) {
+      console.error("Firebase Auth is not initialized for signOut.");
+      return;
+    }
     setLoading(true);
     try {
       await firebaseSignOut(auth);
-      router.push("/sign-in");
+      router.push("/sign-in"); // Redirect to sign-in after sign out
     } catch (error) {
       console.error("Error signing out:", error);
-      // Handle error
     } finally {
       setLoading(false);
     }
@@ -63,7 +74,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   return (
     <AuthContext.Provider value={{ user, loading, signInWithGoogle, signOut }}>
       {children}
-      <Toaster />
     </AuthContext.Provider>
   );
 }
