@@ -115,7 +115,8 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       messageTemplate: finalMessageTemplate,
     };
 
-    MOCK_CAMPAIGNS.unshift(newCampaign);
+    // MOCK_CAMPAIGNS.unshift(newCampaign); // This update is client-side only and server action won't see it directly.
+                                        // Server action startCampaignProcessingAction will handle adding it to its mock data.
 
     toast({
       title: "Campaign Initiated!",
@@ -125,7 +126,8 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
     onOpenChange(false); // Close dialog
 
     try {
-      await startCampaignProcessingAction(newCampaign);
+      // Pass the entire campaign object to the server action
+      await startCampaignProcessingAction(newCampaign); 
       toast({
         title: "Campaign Processing Started",
         description: `"${newCampaign.name}" is now being processed. Check dashboard for updates.`,
@@ -138,8 +140,18 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
         description: `Could not start campaign processing for "${newCampaign.name}". Error: ${error instanceof Error ? error.message : String(error)}`,
         variant: "destructive",
       });
+      // Update the MOCK_CAMPAIGNS on the client-side if the server action fails,
+      // so the UI reflects the failure state.
       const campaignInMock = MOCK_CAMPAIGNS.find(c => c.id === newCampaign.id);
-      if (campaignInMock) campaignInMock.status = "Failed";
+      if (campaignInMock) {
+        campaignInMock.status = "Failed";
+      } else {
+        // If it wasn't even added because processing failed very early
+        // MOCK_CAMPAIGNS.unshift({...newCampaign, status: "Failed"}); // Add it as failed
+      }
+      // To ensure the campaign list updates if it's already rendered on the dashboard:
+      // This would typically involve a state management solution or re-fetching.
+      // For now, relying on page navigation or manual refresh for the list to update.
     } finally {
       setIsLaunching(false);
     }
@@ -233,7 +245,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
           )}
 
           <div>
-            <Label htmlFor="finalMessageTemplate">Final Message Template (must include <code className="bg-muted px-1 rounded text-xs">{{customerName}}</code>)</Label>
+            <Label htmlFor="finalMessageTemplate">Final Message Template (must include <code className="bg-muted px-1 rounded text-xs">{`{{customerName}}`}</code>)</Label>
             <Textarea
               id="finalMessageTemplate"
               placeholder="e.g., Hi {{customerName}}, don't miss our special event!"
@@ -244,7 +256,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
               className={!finalMessageTemplate.toLowerCase().includes("{{customername}}") && finalMessageTemplate ? "border-destructive focus-visible:ring-destructive" : ""}
             />
             {!finalMessageTemplate.toLowerCase().includes("{{customername}}") && finalMessageTemplate && (
-                 <p className="text-xs text-destructive mt-1">Template must include {{customerName}}.</p>
+                 <p className="text-xs text-destructive mt-1">Template must include {`{{customerName}}`}.</p>
             )}
           </div>
         </div>
