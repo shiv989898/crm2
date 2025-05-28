@@ -107,14 +107,17 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
 
     setIsLaunching(true);
 
-    const campaignDataForAction = { // This satisfies the Omit type and includes createdByUserId
+    // Generate audience size between 5 and 10
+    const audienceSize = Math.floor(Math.random() * (10 - 5 + 1)) + 5; 
+
+    const campaignDataForAction = { 
       name: campaignName,
       audienceId: audience.id, 
       audienceName: audience.name,
-      audienceSize: Math.floor(Math.random() * (100 - 10 + 1)) + 10, 
+      audienceSize: audienceSize, 
       objective: campaignObjective,
       messageTemplate: finalMessageTemplate,
-      createdByUserId: user.uid, // Add createdByUserId
+      createdByUserId: user.uid, 
     };
     
     try {
@@ -160,7 +163,7 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
         <DialogHeader>
           <DialogTitle>New Campaign for: <span className="text-primary">{audience.name}</span></DialogTitle>
           <DialogDescription>
-            Define details, get AI message ideas, and set your final message. Target: ~{Math.floor(Math.random() * 100 + 50)} recipients (simulated).
+            Define details, get AI message ideas, and set your final message. Target: ~5-10 recipients (simulated).
           </DialogDescription>
         </DialogHeader>
         
