@@ -5,6 +5,7 @@ import type { Campaign } from "@/types";
 import { CampaignCard } from "./CampaignCard";
 import { MOCK_CAMPAIGNS } from "@/lib/mockData"; // We'll create this file
 import { useState, useEffect } from "react";
+import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"; // Added import
 
 export function CampaignList() {
   // In a real app, this data would come from an API
@@ -67,3 +68,4 @@ export function CampaignList() {
   animation: fadeIn 0.5s ease-out forwards;
 }
 */
+
