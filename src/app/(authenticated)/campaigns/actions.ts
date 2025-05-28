@@ -103,7 +103,7 @@ export async function deliveryReceiptAction(logId: string, deliveryStatus: 'Sent
       let finalSentCount = campaignData.sentCount || 0;
       let finalFailedCount = campaignData.failedCount || 0;
 
-      // Increment counts only if this log entry was 'Pending' before this delivery receipt.
+      // Increment counts only if this log entry was 'Pending' before this delivery receiptAction call potentially updated it.
       // logEntryData holds the state of the log *before* this specific deliveryReceiptAction call potentially updated it.
       if (logEntryData && logEntryData.status === 'Pending') {
         if (deliveryStatus === 'Sent') {
@@ -232,7 +232,8 @@ export async function startCampaignProcessingAction(
           firestoreLogId = logDocRef.id;
           console.log(`[startCampaignProcessingAction LOOP ${i+1}/${campaignToProcess.audienceSize} SUCCESS] Log (ID: ${firestoreLogId}) ADDED. Timestamp: ${new Date().toISOString()}`);
 
-          await new Promise(r => setTimeout(r, Math.random() * 150 + 50)); 
+          // Reduced delay: 10ms to 50ms per message
+          await new Promise(r => setTimeout(r, Math.random() * 40 + 10)); 
           
           const isSuccess = Math.random() < 0.9; 
           const deliveryStatus = isSuccess ? 'Sent' : 'Failed';
