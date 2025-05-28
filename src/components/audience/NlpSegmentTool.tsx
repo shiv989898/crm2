@@ -11,13 +11,18 @@ import { naturalLanguageToSegmentAction } from "@/app/(authenticated)/audience-b
 import { useToast } from "@/hooks/use-toast";
 
 interface NlpSegmentToolProps {
-  onRulesGenerated: (rules: SegmentRule[], description: string) => void;
+  onRulesGenerated: (
+    rules: SegmentRule[], 
+    originalPrompt: string,
+    suggestedName: string,
+    suggestedDescription: string
+  ) => void;
 }
 
 // Helper to map AI response to SegmentRule[]
 const mapAiResponseToRules = (aiJsonString: string): SegmentRule[] => {
   try {
-    const parsed = JSON.parse(aiJsonString);
+    const parsed = JSON.parse(aiJsonString); // This should be the stringified JSON from segmentRules
     if (parsed.conditions && Array.isArray(parsed.conditions)) {
       const conditions = parsed.conditions as Array<any>; // Type assertion for clarity
       return conditions.map((cond, index) => {
@@ -55,7 +60,7 @@ const mapAiResponseToRules = (aiJsonString: string): SegmentRule[] => {
       });
     }
   } catch (error) {
-    console.error("Error parsing AI response:", error);
+    console.error("Error parsing AI segmentRules string:", error, "Input string:", aiJsonString);
     // The calling function will show a toast if this returns an empty array.
   }
   return [];
@@ -75,17 +80,22 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
     setIsLoading(true);
     try {
       const result = await naturalLanguageToSegmentAction({ naturalLanguageDescription: prompt });
+      
+      let generatedRules: SegmentRule[] = [];
       if (result.segmentRules) {
-        const generatedRules = mapAiResponseToRules(result.segmentRules);
-        if (generatedRules.length > 0) {
-          onRulesGenerated(generatedRules, prompt);
-          toast({ title: "Success!", description: "Segment rules generated from your description." });
-        } else {
-          // This can be hit if mapAiResponseToRules returns [] due to parsing error or empty conditions
-          toast({ title: "AI Response Issue", description: "Could not effectively parse rules from AI response. The response might be empty or malformed. Please try a different prompt or refine rules manually.", variant: "destructive" });
-        }
-      } else {
-        toast({ title: "AI Error", description: "Failed to generate rules. The AI returned no segment rule data. Please try again.", variant: "destructive" });
+        generatedRules = mapAiResponseToRules(result.segmentRules);
+      }
+
+      if (generatedRules.length > 0) {
+        onRulesGenerated(generatedRules, prompt, result.suggestedAudienceName || "", result.suggestedAudienceDescription || "");
+        toast({ title: "Success!", description: "Segment rules and suggestions generated from your description." });
+      } else if (result.segmentRules && generatedRules.length === 0) {
+        // This means segmentRules string was present but parsing failed or resulted in no conditions
+        toast({ title: "AI Response Issue", description: "Could not effectively parse rules from AI response. The rules might be empty or malformed. Please try a different prompt or refine rules manually.", variant: "destructive" });
+      }
+       else {
+        // AI returned no segment rule data at all, or suggested name/description might be empty
+        toast({ title: "AI Error", description: "Failed to generate rules or suggestions. The AI returned incomplete data. Please try again.", variant: "destructive" });
       }
     } catch (error) {
       console.error("Error calling AI action:", error);
@@ -103,7 +113,7 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
           AI-Powered Segment Builder
         </CardTitle>
         <CardDescription>
-          Describe your target audience in plain English (e.g., "Users who signed up last month and live in New York").
+          Describe your target audience in plain English (e.g., "Users who signed up last month and live in New York"). The AI will also suggest a name and description.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -120,7 +130,7 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
           ) : (
             <Wand2 className="mr-2 h-4 w-4" />
           )}
-          Generate Rules
+          Generate Rules & Suggestions
         </Button>
       </CardContent>
     </Card>

@@ -2,9 +2,9 @@
 'use server';
 
 /**
- * @fileOverview Converts natural language text prompts into logical rules for generating audience segments.
+ * @fileOverview Converts natural language text prompts into logical rules and suggests a name/description for generating audience segments.
  *
- * - naturalLanguageToSegment - A function that takes a natural language description and returns segment rules.
+ * - naturalLanguageToSegment - A function that takes a natural language description and returns segment rules, suggested name, and description.
  * - NaturalLanguageToSegmentInput - The input type for the naturalLanguageToSegment function.
  * - NaturalLanguageToSegmentOutput - The return type for the naturalLanguageToSegment function.
  */
@@ -27,6 +27,12 @@ const NaturalLanguageToSegmentOutputSchema = z.object({
     .describe(
       'The corresponding segment rules in a logical JSON format (e.g., a JSON object with filter conditions).'
     ),
+  suggestedAudienceName: z
+    .string()
+    .describe('A concise, descriptive name suggested for this audience segment, suitable for display lists.'),
+  suggestedAudienceDescription: z
+    .string()
+    .describe('A brief description summarizing the audience segment, suggested by the AI.'),
 });
 export type NaturalLanguageToSegmentOutput = z.infer<typeof NaturalLanguageToSegmentOutputSchema>;
 
@@ -40,11 +46,15 @@ const prompt = ai.definePrompt({
   name: 'naturalLanguageToSegmentPrompt',
   input: {schema: NaturalLanguageToSegmentInputSchema},
   output: {schema: NaturalLanguageToSegmentOutputSchema},
-  prompt: `You are an AI assistant that translates natural language descriptions of target audiences into a structured JSON format representing segment rules.
+  prompt: `You are an AI assistant that translates natural language descriptions of target audiences into a structured JSON format representing segment rules. You also suggest a suitable name and description for the audience.
 
 Your goal is to convert a user's description like "{{naturalLanguageDescription}}" into a JSON object.
-This JSON object must have a single key "conditions", which is an array of rule objects.
-Each rule object in the "conditions" array can have the following properties:
+This JSON object must have the following top-level keys:
+- "segmentRules": A JSON string representing the filter conditions. This string, when parsed, will be an object with a single key "conditions", which is an array of rule objects.
+- "suggestedAudienceName": A concise and descriptive name for this audience. For example, if the input is "Customers who have made a purchase in the last month and live in California", a good name might be "Recent CA Purchasers".
+- "suggestedAudienceDescription": A brief summary of the audience. For the same example, a description could be "Customers in California who purchased in the last 30 days."
+
+The "conditions" array within "segmentRules" should contain rule objects. Each rule object can have the following properties:
 - "attribute": A string representing the customer attribute to filter on (e.g., "last_purchase_date", "total_spend", "location_city", "email_engagement_opened_last").
 - "operator": A string representing the comparison operator (e.g., "equals", "greater_than", "less_than", "contains", "is_true", "is_false", "before", "after").
 - "value": The value to compare against. The type of this value should be appropriate for the attribute.
@@ -60,68 +70,32 @@ Example 1:
 Input: "Customers who have made a purchase in the last month AND live in California"
 Output:
 {
-  "conditions": [
-    {
-      "attribute": "last_purchase_date",
-      "operator": "after",
-      "value": "30 days ago"
-    },
-    {
-      "logicalOperator": "AND",
-      "attribute": "location_city",
-      "operator": "equals",
-      "value": "California"
-    }
-  ]
+  "segmentRules": "{\\\"conditions\\\":[{\\\"attribute\\\":\\\"last_purchase_date\\\",\\\"operator\\\":\\\"after\\\",\\\"value\\\":\\\"30 days ago\\\"},{\\\"logicalOperator\\\":\\\"AND\\\",\\\"attribute\\\":\\\"location_city\\\",\\\"operator\\\":\\\"equals\\\",\\\"value\\\":\\\"California\\\"}]}",
+  "suggestedAudienceName": "Recent CA Purchasers",
+  "suggestedAudienceDescription": "Customers in California who made a purchase in the last 30 days."
 }
 
 Example 2:
 Input: "Users who signed up before 2023-01-01 OR opened the last email"
 Output:
 {
-  "conditions": [
-    {
-      "attribute": "signup_date",
-      "operator": "before",
-      "value": "2023-01-01"
-    },
-    {
-      "logicalOperator": "OR",
-      "attribute": "email_engagement_opened_last",
-      "operator": "is_true",
-      "value": true
-    }
-  ]
+  "segmentRules": "{\\\"conditions\\\":[{\\\"attribute\\\":\\\"signup_date\\\",\\\"operator\\\":\\\"before\\\",\\\"value\\\":\\\"2023-01-01\\\"},{\\\"logicalOperator\\\":\\\"OR\\\",\\\"attribute\\\":\\\"email_engagement_opened_last\\\",\\\"operator\\\":\\\"is_true\\\",\\\"value\\\":true}]}",
+  "suggestedAudienceName": "Early Signups or Engaged Users",
+  "suggestedAudienceDescription": "Users who signed up before January 1, 2023, or opened the last email."
 }
 
 Example 3:
 Input: "High-value customers who spent more than $500"
 Output:
 {
-  "conditions": [
-    {
-      "attribute": "total_spend",
-      "operator": "greater_than",
-      "value": 500
-    }
-  ]
+  "segmentRules": "{\\\"conditions\\\":[{\\\"attribute\\\":\\\"total_spend\\\",\\\"operator\\\":\\\"greater_than\\\",\\\"value\\\":500}]}",
+  "suggestedAudienceName": "High-Value Customers (>$500)",
+  "suggestedAudienceDescription": "Customers who have spent over $500 in total."
 }
 
-Example 4:
-Input: "Users who are not subscribed to the newsletter"
-Output:
-{
-  "conditions": [
-    {
-      "attribute": "is_subscribed_to_newsletter",
-      "operator": "is_false",
-      "value": false
-    }
-  ]
-}
-
-Based on the description: "{{naturalLanguageDescription}}", generate the JSON segment rules.
-Ensure the generated JSON is valid and strictly follows the specified structure, including correct value types (number, boolean, string).
+Based on the description: "{{naturalLanguageDescription}}", generate the JSON output including segmentRules (as a JSON string), suggestedAudienceName, and suggestedAudienceDescription.
+Ensure the generated JSON is valid and strictly follows the specified structure, including correct value types (number, boolean, string) within the segmentRules.
+The segmentRules value MUST be a stringified JSON.
 `,
 });
 
@@ -133,7 +107,13 @@ const naturalLanguageToSegmentFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await prompt(input);
-    return output!;
+    // Ensure output is not null and adheres to the schema.
+    // If the AI fails to generate some parts, provide defaults.
+    return {
+        segmentRules: output?.segmentRules || '{"conditions":[]}',
+        suggestedAudienceName: output?.suggestedAudienceName || '',
+        suggestedAudienceDescription: output?.suggestedAudienceDescription || '',
+    };
   }
 );
 

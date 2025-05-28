@@ -12,6 +12,11 @@ export async function naturalLanguageToSegmentAction(
   } catch (error) {
     console.error("Error in naturalLanguageToSegmentAction:", error);
     // Return a structured error or rethrow, depending on how you want to handle on client
-    return { segmentRules: "" }; // Or throw an error to be caught by client
+    return { 
+        segmentRules: "", 
+        suggestedAudienceName: "", 
+        suggestedAudienceDescription: "" 
+    }; // Or throw an error to be caught by client
   }
 }
+

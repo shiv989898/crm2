@@ -10,7 +10,7 @@ import { NlpSegmentTool } from "./NlpSegmentTool";
 import { PlusCircle, Save } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { CreateCampaignDialog } from "@/components/campaigns/CreateCampaignDialog"; // We'll create this
+import { CreateCampaignDialog } from "@/components/campaigns/CreateCampaignDialog"; 
 
 const AVAILABLE_FIELDS = [
   { label: "Last Purchase Date", value: "last_purchase_date", type: 'date' as const },
@@ -19,6 +19,7 @@ const AVAILABLE_FIELDS = [
   { label: "Signup Date", value: "signup_date", type: 'date' as const },
   { label: "Email Engagement (Opened last email)", value: "email_engagement_opened_last", type: 'boolean' as const },
   { label: "Number of Purchases", value: "number_of_purchases", type: 'number' as const },
+  { label: "Is Subscribed to Newsletter", value: "is_subscribed_to_newsletter", type: 'boolean' as const },
 ];
 
 const getAvailableOperators = (fieldType: string): { label: string; value: string }[] => {
@@ -89,14 +90,24 @@ export function AudienceBuilderForm() {
     setRules(rules.filter((rule) => rule.id !== id));
   };
 
-  const handleNlpRulesGenerated = (generatedRules: SegmentRule[], description: string) => {
+  const handleNlpRulesGenerated = (
+    generatedRules: SegmentRule[], 
+    originalPrompt: string,
+    suggestedName: string,
+    suggestedDescription: string
+  ) => {
     setRules(generatedRules);
-    // Optionally pre-fill audience name or description from NLP prompt
-    if (!audienceName && description) {
-        setAudienceName(`Audience from: "${description.substring(0,30)}${description.length > 30 ? '...' : ''}"`)
+    
+    if (suggestedName) {
+        setAudienceName(suggestedName);
+    } else if (!audienceName && originalPrompt) { // Fallback if AI doesn't suggest a name
+        setAudienceName(`Audience from: "${originalPrompt.substring(0,30)}${originalPrompt.length > 30 ? '...' : ''}"`);
     }
-    if (!audienceDescription && description) {
-        setAudienceDescription(description);
+
+    if (suggestedDescription) {
+        setAudienceDescription(suggestedDescription);
+    } else if (!audienceDescription && originalPrompt) { // Fallback if AI doesn't suggest a description
+        setAudienceDescription(originalPrompt);
     }
   };
 
@@ -112,12 +123,20 @@ export function AudienceBuilderForm() {
     
     // Validate rules (basic validation)
     for (const rule of rules) {
-        if (!rule.field || !rule.operator || (rule.value === '' && AVAILABLE_FIELDS.find(f => f.value === rule.field)?.type !== 'boolean')) {
-            toast({ title: "Incomplete Rule", description: `Rule for field "${rule.field || 'Unnamed'}" is incomplete. Please fill all parts.`, variant: "destructive" });
+        const fieldConfig = AVAILABLE_FIELDS.find(f => f.value === rule.field);
+        if (!rule.field || !rule.operator ) {
+             toast({ title: "Incomplete Rule", description: `Rule for field "${rule.field || 'Unnamed'}" is missing field or operator. Please fill all parts.`, variant: "destructive" });
+            return;
+        }
+        // For non-boolean types, value should not be empty.
+        // For boolean types, value can be true/false and is usually set by a select, not direct input typically.
+        // The mapAiResponseToRules sets boolean values correctly, and RuleRow uses Select for boolean
+        if (fieldConfig?.type !== 'boolean' && rule.value === '') {
+             toast({ title: "Incomplete Rule", description: `Rule for field "${fieldConfig?.label || rule.field}" requires a value.`, variant: "destructive" });
             return;
         }
         if (rules.indexOf(rule) > 0 && !rule.logicalOperator) {
-             toast({ title: "Logical Operator Missing", description: `Please select AND/OR for rule connecting to "${rule.field || 'Unnamed'}".`, variant: "destructive" });
+             toast({ title: "Logical Operator Missing", description: `Please select AND/OR for rule connecting to "${fieldConfig?.label || rule.field}".`, variant: "destructive" });
             return;
         }
     }
@@ -151,7 +170,7 @@ export function AudienceBuilderForm() {
         <CardHeader>
           <CardTitle className="text-lg">Define Audience Rules Manually</CardTitle>
           <CardDescription>
-            Add or edit rules to precisely define your target audience.
+            Add or edit rules to precisely define your target audience. Use the AI tool above for suggestions.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -209,19 +228,15 @@ export function AudienceBuilderForm() {
           onOpenChange={setIsCreateCampaignDialogOpen}
           audience={currentAudience}
           onCampaignCreated={(campaignName) => {
-            // This is where you would add the new campaign to your MOCK_CAMPAIGNS or real DB
-            // For now, just logging and showing a toast. The CampaignList will show MOCK_CAMPAIGNS.
             console.log(`Campaign "${campaignName}" created for audience "${currentAudience.name}"`);
             toast({
               title: "Campaign Initiated!",
               description: `Campaign "${campaignName}" based on audience "${currentAudience.name}" is being processed.`,
             });
-            // Potentially add to MOCK_CAMPAIGNS here if you want it to reflect immediately without page reload
-            // This would require MOCK_CAMPAIGNS to be in a shared state or passed down/lifted up.
-            // For now, we assume user navigates to dashboard to see it (if it were a real backend save).
           }}
         />
       )}
     </div>
   );
 }
+
