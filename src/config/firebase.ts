@@ -1,6 +1,7 @@
 
 import { initializeApp, getApps, getApp, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore"; // Added Firestore import
 
 // Log the API key to help diagnose if it's being loaded
 console.log('Firebase API Key from env:', process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
@@ -64,6 +65,8 @@ if (!getApps().length) {
 
 // @ts-ignore - app could be null if initialization failed
 const auth = app ? getAuth(app) : null;
+// @ts-ignore - app could be null if initialization failed
+const db = app ? getFirestore(app) : null; // Initialize Firestore
 const googleProvider = new GoogleAuthProvider();
 
-export { app, auth, googleProvider };
+export { app, auth, db, googleProvider }; // Export db

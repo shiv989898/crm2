@@ -1,171 +1,211 @@
 
 "use server";
 
-import { MOCK_CAMPAIGNS, MOCK_COMMUNICATION_LOGS } from '@/lib/mockData';
+import { db } from '@/config/firebase'; // Import Firestore instance
+import { 
+  collection, 
+  addDoc, 
+  getDocs, 
+  doc, 
+  updateDoc, 
+  query, 
+  orderBy, 
+  Timestamp, // For potential future use with native Firestore timestamps
+  runTransaction,
+  getDoc,
+  increment
+} from 'firebase/firestore';
 import type { Campaign, CommunicationLogEntry, CampaignStatus } from '@/types';
 import { generateCampaignMessages, type GenerateCampaignMessagesInput, type GenerateCampaignMessagesOutput } from '@/ai/flows/generate-campaign-messages-flow';
 
+const CAMPAIGNS_COLLECTION = 'campaigns';
+const COMMUNICATION_LOGS_COLLECTION = 'communicationLogs';
+
 export async function getCampaignsAction(): Promise<Campaign[]> {
-  console.log(`[getCampaignsAction] ENTERED. Timestamp: ${new Date().toISOString()}`);
-  console.log(`[getCampaignsAction] MOCK_CAMPAIGNS current length: ${MOCK_CAMPAIGNS.length}`);
-  console.log(`[getCampaignsAction] Campaigns (names) before returning:`, MOCK_CAMPAIGNS.map(c => c.name));
-  // Return a new sorted array to prevent accidental mutation and ensure consistent order
-  const sortedCampaigns = [...MOCK_CAMPAIGNS].sort((a, b) => 
-    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
-  return sortedCampaigns;
-}
-
-// This function is called by the "dummy vendor API" simulation
-export async function deliveryReceiptAction(logId: string, deliveryStatus: 'Sent' | 'Failed') {
-  const logEntry = MOCK_COMMUNICATION_LOGS.find(log => log.logId === logId);
-  if (!logEntry) {
-    console.error(`[deliveryReceiptAction] Log entry ${logId} not found.`);
-    return;
+  console.log(`[getCampaignsAction] ENTERED. Fetching from Firestore. Timestamp: ${new Date().toISOString()}`);
+  if (!db) {
+    console.error("[getCampaignsAction] Firestore not initialized.");
+    return [];
   }
-  logEntry.status = deliveryStatus;
-  logEntry.timestamp = new Date().toISOString(); // Update timestamp on final status
-
-  const campaign = MOCK_CAMPAIGNS.find(c => c.id === logEntry.campaignId);
-  if (!campaign) {
-    console.error(`[deliveryReceiptAction] Campaign ${logEntry.campaignId} for log ${logId} not found.`);
-    return;
-  }
-
-  // Ensure counts are initialized if undefined
-  campaign.sentCount = campaign.sentCount || 0;
-  campaign.failedCount = campaign.failedCount || 0;
-  campaign.processedCount = campaign.processedCount || 0;
-
-  if (deliveryStatus === 'Sent') {
-    campaign.sentCount++;
-  } else {
-    campaign.failedCount++;
-  }
-  campaign.processedCount++;
-
-  // Check if all messages for the campaign have been processed
-  if (campaign.processedCount === campaign.audienceSize) {
-    if (campaign.failedCount === 0 && campaign.sentCount === campaign.audienceSize) {
-      campaign.status = 'Sent';
-    } else if (campaign.sentCount === 0 && campaign.failedCount === campaign.audienceSize) {
-      campaign.status = 'Failed';
-    } else {
-      campaign.status = 'CompletedWithFailures';
-    }
-    console.log(`[deliveryReceiptAction] Campaign ${campaign.id} final status updated: ${campaign.status}`);
-  } else if (campaign.status !== 'Processing') {
-    campaign.status = 'Processing';
-  }
-}
-
-export async function startCampaignProcessingAction(campaignToProcess: Campaign) {
-  console.log(`[startCampaignProcessingAction] Received campaign: { id: ${campaignToProcess.id}, name: "${campaignToProcess.name}", status: "${campaignToProcess.status}" }`);
-  console.log(`[startCampaignProcessingAction] MOCK_CAMPAIGNS length BEFORE add/update: ${MOCK_CAMPAIGNS.length}`);
-
-  let campaignRef: Campaign | undefined = MOCK_CAMPAIGNS.find(c => c.id === campaignToProcess.id);
-
-  if (!campaignRef) {
-    // This is a new campaign. Add it to the MOCK_CAMPAIGNS array.
-    // The campaignToProcess object already has its initial status set to "Pending" by the client.
-    // We create a new object to ensure we're adding exactly what's needed.
-    const newCampaignEntry: Campaign = {
-      ...campaignToProcess, // Spread all properties from the input
-      status: "Pending",    // Explicitly set/ensure status
-      processedCount: 0,
-      sentCount: 0,
-      failedCount: 0,
-    };
-    MOCK_CAMPAIGNS.unshift(newCampaignEntry); // Add to the beginning of the array
-    campaignRef = newCampaignEntry; // campaignRef is now the object *in* the MOCK_CAMPAIGNS array
-    console.log(`[startCampaignProcessingAction] Campaign "${campaignRef.name}" (ID: ${campaignRef.id}) ADDED to MOCK_CAMPAIGNS.`);
-  } else {
-    // Campaign exists, update it. campaignRef is already the object from MOCK_CAMPAIGNS.
-    Object.assign(campaignRef, {
-      ...campaignToProcess, // Update with incoming details
-      status: "Pending",    // Reset status for reprocessing
-      processedCount: 0,
-      sentCount: 0,
-      failedCount: 0,
+  try {
+    const campaignsQuery = query(collection(db, CAMPAIGNS_COLLECTION), orderBy("createdAt", "desc"));
+    const querySnapshot = await getDocs(campaignsQuery);
+    const campaigns: Campaign[] = [];
+    querySnapshot.forEach((doc) => {
+      campaigns.push({ id: doc.id, ...doc.data() } as Campaign);
     });
-    console.log(`[startCampaignProcessingAction] Campaign "${campaignRef.name}" (ID: ${campaignRef.id}) UPDATED in MOCK_CAMPAIGNS.`);
+    console.log(`[getCampaignsAction] Fetched ${campaigns.length} campaigns from Firestore.`);
+    return campaigns;
+  } catch (error) {
+    console.error("[getCampaignsAction] Error fetching campaigns from Firestore:", error);
+    return [];
   }
-  
-  console.log(`[startCampaignProcessingAction] MOCK_CAMPAIGNS length AFTER add/update: ${MOCK_CAMPAIGNS.length}`);
-  console.log(`[startCampaignProcessingAction] MOCK_CAMPAIGNS (names) after add/update:`, MOCK_CAMPAIGNS.map(c => c.name));
-  
-  // At this point, campaignRef *must* be defined if the logic above is correct
-  if (!campaignRef) {
-    console.error(`[startCampaignProcessingAction] CRITICAL ERROR: Campaign "${campaignToProcess.name}" not found in MOCK_CAMPAIGNS after attempt to add/update.`);
-    throw new Error(`Campaign ${campaignToProcess.id} could not be prepared for processing.`);
+}
+
+export async function deliveryReceiptAction(logId: string, deliveryStatus: 'Sent' | 'Failed') {
+  console.log(`[deliveryReceiptAction] Log ID: ${logId}, Status: ${deliveryStatus}`);
+  if (!db) {
+    console.error("[deliveryReceiptAction] Firestore not initialized.");
+    return;
   }
-  
-  // Now work with campaignRef, which is guaranteed to be the object from the MOCK_CAMPAIGNS array
-  console.log(`[startCampaignProcessingAction] Initializing campaign "${campaignRef.name}" (ID: ${campaignRef.id}). Target audience size: ${campaignRef.audienceSize}. Current status: ${campaignRef.status}`);
 
-  // Short delay to allow UI to potentially show "Pending" before "Processing"
-  await new Promise(r => setTimeout(r, 200)); // Slightly increased delay
+  const logDocRef = doc(db, COMMUNICATION_LOGS_COLLECTION, logId);
 
-  campaignRef.status = 'Processing'; // This mutates the object in MOCK_CAMPAIGNS
-  console.log(`[startCampaignProcessingAction] Campaign "${campaignRef.name}" (ID: ${campaignRef.id}) status changed to Processing.`);
-
-  // Clear previous logs for this campaign if re-processing
-  const existingLogIndexes = MOCK_COMMUNICATION_LOGS.reduce((acc, log, index) => {
-    if (log.campaignId === campaignRef!.id) { 
-      acc.push(index);
+  try {
+    const logDocSnap = await getDoc(logDocRef);
+    if (!logDocSnap.exists()) {
+      console.error(`[deliveryReceiptAction] Log entry ${logId} not found in Firestore.`);
+      return;
     }
-    return acc;
-  }, [] as number[]);
-  for (let i = existingLogIndexes.length - 1; i >= 0; i--) {
-    MOCK_COMMUNICATION_LOGS.splice(existingLogIndexes[i], 1);
-  }
 
-  const processingPromises: Promise<void>[] = [];
-
-  for (let i = 0; i < campaignRef.audienceSize; i++) {
-    const customerId = `cust-${campaignRef.id}-${Date.now()}-${i}`;
-    const firstNames = ["Alex", "Jamie", "Chris", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Drew", "Skyler"];
-    const lastInitials = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const customerName = `${firstNames[i % firstNames.length]} ${lastInitials[i % lastInitials.length]}.`;
-
-    let message = campaignRef.messageTemplate ? campaignRef.messageTemplate.replace(/\{\{customerName\}\}/gi, customerName) : `Hi ${customerName}, here's a special offer for you!`;
-    
-    const logId = `log-${campaignRef.id}-${Date.now()}-${i}`;
-
-    const logEntry: CommunicationLogEntry = {
-      logId,
-      campaignId: campaignRef.id,
-      customerId,
-      customerName,
-      message,
-      status: 'Pending', 
+    const logEntryData = logDocSnap.data() as CommunicationLogEntry;
+    await updateDoc(logDocRef, {
+      status: deliveryStatus,
       timestamp: new Date().toISOString(),
-    };
-    MOCK_COMMUNICATION_LOGS.push(logEntry);
+    });
 
-    const promise = (async () => {
-      try {
-        await new Promise(r => setTimeout(r, Math.random() * 150 + 50)); 
-        const isSuccess = Math.random() < 0.9; 
-        const deliveryStatus = isSuccess ? 'Sent' : 'Failed';
-        // Call deliveryReceiptAction which updates the campaignRef (from MOCK_CAMPAIGNS)
-        await deliveryReceiptAction(logId, deliveryStatus); 
-      } catch (error) {
-        console.error(`[startCampaignProcessingAction] Error processing message for logId ${logId}:`, error);
-        await deliveryReceiptAction(logId, 'Failed');
+    const campaignId = logEntryData.campaignId;
+    if (!campaignId) {
+      console.error(`[deliveryReceiptAction] Campaign ID missing in log entry ${logId}.`);
+      return;
+    }
+    const campaignDocRef = doc(db, CAMPAIGNS_COLLECTION, campaignId);
+
+    // Transaction to safely update campaign counts
+    await runTransaction(db, async (transaction) => {
+      const campaignDocSnap = await transaction.get(campaignDocRef);
+      if (!campaignDocSnap.exists()) {
+        console.error(`[deliveryReceiptAction] Campaign ${campaignId} for log ${logId} not found in Firestore.`);
+        throw new Error(`Campaign ${campaignId} not found`);
       }
-    })();
-    processingPromises.push(promise);
+
+      const campaignData = campaignDocSnap.data() as Campaign;
+      let newSentCount = campaignData.sentCount || 0;
+      let newFailedCount = campaignData.failedCount || 0;
+      let newProcessedCount = campaignData.processedCount || 0;
+
+      if (deliveryStatus === 'Sent') {
+        newSentCount++;
+      } else {
+        newFailedCount++;
+      }
+      newProcessedCount++;
+
+      let newStatus = campaignData.status;
+      if (newProcessedCount === campaignData.audienceSize) {
+        if (newFailedCount === 0 && newSentCount === campaignData.audienceSize) {
+          newStatus = 'Sent';
+        } else if (newSentCount === 0 && newFailedCount === campaignData.audienceSize) {
+          newStatus = 'Failed';
+        } else {
+          newStatus = 'CompletedWithFailures';
+        }
+        console.log(`[deliveryReceiptAction] Campaign ${campaignId} final status updated to: ${newStatus}`);
+      } else if (campaignData.status !== 'Processing') {
+         // This might be redundant if initial status is set correctly to Processing
+         // but can act as a safeguard
+        newStatus = 'Processing';
+      }
+      
+      transaction.update(campaignDocRef, {
+        sentCount: newSentCount,
+        failedCount: newFailedCount,
+        processedCount: newProcessedCount,
+        status: newStatus,
+      });
+    });
+
+  } catch (error) {
+    console.error(`[deliveryReceiptAction] Error updating Firestore for log ${logId}:`, error);
+  }
+}
+
+export async function startCampaignProcessingAction(campaignToProcess: Omit<Campaign, 'id'>): Promise<string | null> {
+  console.log(`[startCampaignProcessingAction] Received campaign: { name: "${campaignToProcess.name}", status: "${campaignToProcess.status}" }`);
+   if (!db) {
+    console.error("[startCampaignProcessingAction] Firestore not initialized.");
+    return null;
   }
 
-  Promise.allSettled(processingPromises).then(() => {
-    // The final status is set by deliveryReceiptAction when all messages are processed.
-    console.log(`[startCampaignProcessingAction] All simulated messages for campaign "${campaignRef!.name}" (ID: ${campaignRef!.id}) dispatched for processing.`);
-  }).catch(error => {
-    console.error(`[startCampaignProcessingAction] Unexpected error in Promise.allSettled for campaign "${campaignRef!.name}" (ID: ${campaignRef!.id}):`, error);
-  });
+  try {
+    // 1. Add the new campaign to Firestore
+    const campaignDataWithInitialStatus: Omit<Campaign, 'id'> = {
+      ...campaignToProcess,
+      status: "Pending", // Initial status before processing
+      processedCount: 0,
+      sentCount: 0,
+      failedCount: 0,
+      createdAt: new Date().toISOString(), // Ensure createdAt is set
+    };
+    const campaignDocRef = await addDoc(collection(db, CAMPAIGNS_COLLECTION), campaignDataWithInitialStatus);
+    const campaignId = campaignDocRef.id;
+    console.log(`[startCampaignProcessingAction] Campaign "${campaignToProcess.name}" (ID: ${campaignId}) ADDED to Firestore.`);
 
-  console.log(`[startCampaignProcessingAction] Campaign "${campaignRef.name}" processing initiated. ${campaignRef.audienceSize} messages queued.`);
+    // 2. Update status to "Processing"
+    await updateDoc(campaignDocRef, { status: 'Processing' });
+    console.log(`[startCampaignProcessingAction] Campaign "${campaignToProcess.name}" (ID: ${campaignId}) status changed to Processing in Firestore.`);
+    
+    // 3. Simulate message sending and log creation
+    const processingPromises: Promise<void>[] = [];
+
+    for (let i = 0; i < campaignToProcess.audienceSize; i++) {
+      const customerId = `cust-${campaignId}-${Date.now()}-${i}`;
+      const firstNames = ["Alex", "Jamie", "Chris", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Drew", "Skyler"];
+      const lastInitials = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+      const customerName = `${firstNames[i % firstNames.length]} ${lastInitials[i % lastInitials.length]}.`;
+
+      let message = campaignToProcess.messageTemplate 
+        ? campaignToProcess.messageTemplate.replace(/\{\{customerName\}\}/gi, customerName) 
+        : `Hi ${customerName}, here's a special offer for you!`;
+      
+      // Temporary logId for local use, Firestore will generate its own
+      // const tempLogId = `log-${campaignId}-${Date.now()}-${i}`; 
+
+      const logEntry: Omit<CommunicationLogEntry, 'logId'> = { // Omit logId as Firestore generates it
+        campaignId: campaignId,
+        customerId,
+        customerName,
+        message,
+        status: 'Pending', 
+        timestamp: new Date().toISOString(),
+      };
+      
+      // Add log entry to Firestore and then simulate processing
+      const promise = (async () => {
+        try {
+          const logDocRef = await addDoc(collection(db, COMMUNICATION_LOGS_COLLECTION), logEntry);
+          const firestoreLogId = logDocRef.id;
+
+          await new Promise(r => setTimeout(r, Math.random() * 150 + 50)); 
+          const isSuccess = Math.random() < 0.9; 
+          const deliveryStatus = isSuccess ? 'Sent' : 'Failed';
+          await deliveryReceiptAction(firestoreLogId, deliveryStatus); 
+        } catch (error) {
+          console.error(`[startCampaignProcessingAction] Error processing message for customer ${customerId} in campaign ${campaignId}:`, error);
+          // If log creation failed, we can't call deliveryReceiptAction for it.
+          // If log creation succeeded but delivery failed, deliveryReceiptAction handles it.
+        }
+      })();
+      processingPromises.push(promise);
+    }
+
+    // Don't wait for all promises to resolve here in the server action
+    // to allow the function to return faster to the client.
+    // The updates will happen asynchronously.
+    Promise.allSettled(processingPromises).then(() => {
+      console.log(`[startCampaignProcessingAction] All simulated messages for campaign "${campaignToProcess.name}" (ID: ${campaignId}) dispatched for processing.`);
+      // Final status is set by deliveryReceiptAction when all messages are processed.
+    }).catch(error => {
+      console.error(`[startCampaignProcessingAction] Unexpected error in Promise.allSettled for campaign "${campaignToProcess.name}" (ID: ${campaignId}):`, error);
+    });
+
+    console.log(`[startCampaignProcessingAction] Campaign "${campaignToProcess.name}" processing initiated. ${campaignToProcess.audienceSize} messages queued.`);
+    return campaignId; // Return the new campaign ID
+
+  } catch (error) {
+    console.error("[startCampaignProcessingAction] Error processing campaign:", error);
+    return null;
+  }
 }
 
 
