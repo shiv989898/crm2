@@ -1,22 +1,14 @@
 
 "use client";
 
-import type { User } from "firebase/auth";
-import { createContext, useEffect, useState, ReactNode, useContext } from "react";
-// import { auth, googleProvider } from "@/config/firebase"; // Firebase auth no longer used directly here
-// import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth"; // Firebase auth no longer used directly here
+import type { User as FirebaseUser } from "firebase/auth";
+import { createContext, useEffect, useState, ReactNode } from "react";
+import { auth, googleProvider } from "@/config/firebase"; 
+import { signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "firebase/auth";
 import { useRouter } from "next/navigation";
 
-// Define a shape for our mock user if User type is too complex or tied to Firebase
-interface MockUser {
-  uid: string;
-  email: string | null;
-  displayName: string | null;
-  photoURL: string | null;
-}
-
 export interface AuthContextType {
-  user: MockUser | null; // Changed to MockUser
+  user: FirebaseUser | null;
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
@@ -28,49 +20,70 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-// Create a default mock user
-const mockUser: MockUser = {
-  uid: "mock-user-id-123",
-  email: "dev.user@example.com",
-  displayName: "Dev User",
-  photoURL: "https://placehold.co/100x100.png?text=DU", // Placeholder avatar
-};
-
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<MockUser | null>(mockUser); // Initialize with mock user
-  const [loading, setLoading] = useState(false); // Assume loaded as we're using a mock user
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [loading, setLoading] = useState(true); // Start loading true for initial auth check
   const router = useRouter();
 
-  // useEffect(() => {
-  //   // Real auth listener removed for bypass
-  //   // if (!auth) {
-  //   //   console.error("Firebase Auth is not initialized. Check Firebase config.");
-  //   //   setLoading(false);
-  //   //   return;
-  //   // }
-  //   // const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-  //   //   setUser(currentUser);
-  //   //   setLoading(false);
-  //   // });
-  //   // return () => unsubscribe();
-  //   setLoading(false); // Ensure loading is false
-  // }, []);
+  useEffect(() => {
+    if (!auth) {
+      console.error("Firebase Auth is not initialized. Check Firebase config.");
+      setLoading(false);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false);
+      console.log("Auth state changed, user:", currentUser ? currentUser.uid : null);
+      if (!currentUser && window.location.pathname !== '/sign-in') {
+        // Only redirect if not already on sign-in to avoid loops
+        // router.push("/sign-in"); // Let AuthenticatedLayout handle this
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
 
   const signInWithGoogle = async () => {
-    console.log("signInWithGoogle called (auth bypassed - no action taken).");
-    // No actual sign-in logic as auth is bypassed
-    // setUser(mockUser); // Already set, but could re-set if needed
-    // setLoading(false);
-    router.push("/dashboard"); // Navigate to dashboard as if login was successful
+    if (!auth) {
+      console.error("Firebase Auth is not initialized. Cannot sign in.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await signInWithPopup(auth, googleProvider);
+      // onAuthStateChanged will handle setting user and redirecting via useEffect in AuthenticatedLayout or page.tsx
+      // router.push("/dashboard"); // No longer needed here, let auth state drive redirects
+    } catch (error) {
+      console.error("Error signing in with Google:", error);
+      // Handle specific errors like auth/popup-blocked if needed
+      if ((error as any).code === 'auth/popup-blocked') {
+        alert('Google Sign-In popup was blocked by your browser. Please allow popups for this site and try again.');
+      } else if ((error as any).code === 'auth/cancelled-popup-request') {
+        console.log('Google Sign-In popup request was cancelled by the user.');
+      }
+      else {
+        alert('Failed to sign in with Google. See console for details.');
+      }
+    } finally {
+      // setLoading(false); // onAuthStateChanged will set loading to false
+    }
   };
 
   const signOut = async () => {
-    console.log("signOut called (auth bypassed - mock user cleared).");
-    // setUser(null); // Clear mock user
-    // router.push("/sign-in"); // Navigate to a conceptual sign-in page
-    // For true bypass, we might keep the mock user or handle UI differently
-    // For now, let's keep the user to allow continued UI interaction
-    alert("Sign out functionality is currently bypassed for development.");
+    if (!auth) {
+      console.error("Firebase Auth is not initialized. Cannot sign out.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await firebaseSignOut(auth);
+      // onAuthStateChanged will set user to null
+      router.push("/sign-in"); 
+    } catch (error) {
+      console.error("Error signing out:", error);
+    } finally {
+      // setLoading(false); // onAuthStateChanged will set loading to false
+    }
   };
 
   return (

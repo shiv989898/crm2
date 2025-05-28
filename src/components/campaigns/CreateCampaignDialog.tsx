@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import type { Audience, Campaign, CampaignStatus } from "@/types";
+import type { Audience, Campaign } from "@/types";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,11 +17,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { startCampaignProcessingAction, generateCampaignMessagesAction } from "@/app/(authenticated)/campaigns/actions";
-import { Loader2, Wand2, Sparkles, Copy } from "lucide-react";
+import { Loader2, Sparkles, Copy } from "lucide-react";
 import type { GenerateCampaignMessagesOutput } from "@/ai/flows/generate-campaign-messages-flow";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useRouter } from "next/navigation";
-
+import { useAuth } from "@/hooks/useAuth"; // Import useAuth
 
 interface CreateCampaignDialogProps {
   isOpen: boolean;
@@ -31,10 +31,11 @@ interface CreateCampaignDialogProps {
 }
 
 export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaignCreated }: CreateCampaignDialogProps) {
+  const { user } = useAuth(); // Get the current user
   const [campaignName, setCampaignName] = useState("");
   const [campaignObjective, setCampaignObjective] = useState("");
-  const [companyName, setCompanyName] = useState("Nexus CRM"); // Default or fetch from settings
-  const [productOrService, setProductOrService] = useState("our services"); // Default
+  const [companyName, setCompanyName] = useState("Nexus CRM"); 
+  const [productOrService, setProductOrService] = useState("our services"); 
   const [finalMessageTemplate, setFinalMessageTemplate] = useState("");
   
   const [messageSuggestions, setMessageSuggestions] = useState<GenerateCampaignMessagesOutput>([]);
@@ -49,9 +50,6 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
       setCampaignObjective("");
       setFinalMessageTemplate("");
       setMessageSuggestions([]);
-      // Consider resetting companyName and productOrService if they should be fresh per dialog open
-      // setCompanyName("Nexus CRM"); 
-      // setProductOrService("our services");
     }
   }, [isOpen, audience.name]);
 
@@ -90,6 +88,10 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
   };
   
   const handleCreateCampaign = async () => {
+    if (!user) {
+      toast({ title: "Authentication Error", description: "User not found. Please sign in again.", variant: "destructive" });
+      return;
+    }
     if (!campaignName.trim()) {
       toast({ title: "Campaign Name Required", variant: "destructive" });
       return;
@@ -105,15 +107,14 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
 
     setIsLaunching(true);
 
-    const campaignDataForAction: Omit<Campaign, 'id' | 'createdAt' | 'status' | 'sentCount' | 'failedCount' | 'processedCount'> = {
+    const campaignDataForAction = { // This satisfies the Omit type and includes createdByUserId
       name: campaignName,
       audienceId: audience.id, 
       audienceName: audience.name,
-      // Simulate audience size for now - in a real app, this would come from the audience definition
       audienceSize: Math.floor(Math.random() * (100 - 10 + 1)) + 10, 
       objective: campaignObjective,
       messageTemplate: finalMessageTemplate,
-      // status, createdAt, counts are set by the server action
+      createdByUserId: user.uid, // Add createdByUserId
     };
     
     try {
@@ -259,7 +260,11 @@ export function CreateCampaignDialog({ isOpen, onOpenChange, audience, onCampaig
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLaunching}>
             Cancel
           </Button>
-          <Button onClick={handleCreateCampaign} disabled={isLaunching || !finalMessageTemplate.trim() || !campaignName.trim()} className="bg-primary hover:bg-primary/90 text-primary-foreground w-[160px]">
+          <Button 
+            onClick={handleCreateCampaign} 
+            disabled={isLaunching || !finalMessageTemplate.trim() || !campaignName.trim() || !user} 
+            className="bg-primary hover:bg-primary/90 text-primary-foreground w-[160px]"
+          >
             {isLaunching ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />

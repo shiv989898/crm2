@@ -3,8 +3,8 @@ export type SegmentRule = {
   id: string;
   field: string;
   operator: string;
-  value: string | number | boolean | Date | undefined; // Modified to allow undefined
-  logicalOperator?: 'AND' | 'OR'; // Connects this rule to the NEXT rule
+  value: string | number | boolean | Date | undefined; 
+  logicalOperator?: 'AND' | 'OR'; 
 };
 
 export type Audience = {
@@ -12,7 +12,7 @@ export type Audience = {
   name: string;
   rules: SegmentRule[];
   createdAt: string; // ISO string
-  description?: string; // Optional description, possibly from NLP
+  description?: string; 
 };
 
 export type CampaignStatus =
@@ -26,16 +26,17 @@ export type CampaignStatus =
 export type Campaign = {
   id:string;
   name: string;
-  audienceId: string; // ID of the Audience
-  audienceName: string; // Name of the Audience
+  audienceId: string; 
+  audienceName: string; 
   audienceSize: number;
   createdAt: string; // ISO string
   status: CampaignStatus;
   sentCount: number;
   failedCount: number;
-  processedCount?: number; // Number of messages that have reached a final state (Sent/Failed)
-  objective?: string; // User-defined campaign objective
-  messageTemplate?: string; // Core message template with placeholders like {{customerName}}
+  processedCount?: number; 
+  objective?: string; 
+  messageTemplate?: string; 
+  createdByUserId?: string; // ID of the user who created the campaign
 };
 
 export type UserProfile = {
@@ -46,11 +47,11 @@ export type UserProfile = {
 };
 
 export type CommunicationLogEntry = {
-  logId: string;
+  logId: string; // This will be the Firestore document ID
   campaignId: string;
-  customerId: string; // Mock customer ID
-  customerName: string; // Mock customer name for personalized message
-  message: string; // The final personalized message sent
+  customerId: string; 
+  customerName: string; 
+  message: string; 
   status: 'Pending' | 'Sent' | 'Failed';
   timestamp: string; // ISO string
 };

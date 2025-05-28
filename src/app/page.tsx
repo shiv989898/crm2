@@ -3,30 +3,27 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-// import { useAuth } from "@/hooks/useAuth"; // useAuth might not be needed if directly redirecting
+import { useAuth } from "@/hooks/useAuth"; 
 import { Loader2 } from "lucide-react";
 
 export default function HomePage() {
-  // const { user, loading } = useAuth(); // Auth check bypassed
+  const { user, loading } = useAuth(); 
   const router = useRouter();
 
   useEffect(() => {
-    // Since auth is bypassed, always redirect to dashboard
-    router.replace("/dashboard");
-    // if (!loading) {
-    //   if (user) {
-    //     router.replace("/dashboard");
-    //   } else {
-    //     // router.replace("/sign-in"); // Sign-in bypassed
-    //     router.replace("/dashboard"); // Go to dashboard even if "no user" as auth is off
-    //   }
-    // }
-  }, [router]); // Removed user, loading dependency
+    if (!loading) {
+      if (user) {
+        router.replace("/dashboard");
+      } else {
+        router.replace("/sign-in"); 
+      }
+    }
+  }, [user, loading, router]);
 
   return (
-    <div className="flex h-screen items-center justify-center">
+    <div className="flex h-screen items-center justify-center bg-background">
       <Loader2 className="h-12 w-12 animate-spin text-primary" />
-      <p className="ml-4">Redirecting...</p>
+      <p className="ml-4 text-muted-foreground">Loading Nexus CRM...</p>
     </div>
   );
 }
