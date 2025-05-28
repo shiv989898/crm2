@@ -1,4 +1,7 @@
 
+import { config } from 'dotenv'; // Explicitly load dotenv
+config(); // Call config at the top
+
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
