@@ -3,7 +3,7 @@ export type SegmentRule = {
   id: string;
   field: string;
   operator: string;
-  value: string | number | boolean | Date;
+  value: string | number | boolean | Date | undefined; // Modified to allow undefined
   logicalOperator?: 'AND' | 'OR'; // Connects this rule to the NEXT rule
 };
 
@@ -54,4 +54,3 @@ export type CommunicationLogEntry = {
   status: 'Pending' | 'Sent' | 'Failed';
   timestamp: string; // ISO string
 };
-

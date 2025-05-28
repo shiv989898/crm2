@@ -29,6 +29,31 @@ export function RuleRow({ rule, onUpdateRule, onRemoveRule, isFirstRule, availab
   const renderValueInput = () => {
     switch (fieldType) {
       case 'date':
+        let displayDate: string | null = null;
+        if (rule.value instanceof Date) {
+          // Ensure it's a valid date before formatting
+          if (!isNaN(rule.value.getTime())) {
+            displayDate = format(rule.value, "PPP");
+          }
+        } else if (typeof rule.value === 'string' && rule.value) {
+          const parsedDate = new Date(rule.value);
+          if (!isNaN(parsedDate.getTime())) { // Check if date is valid
+            displayDate = format(parsedDate, "PPP");
+          }
+        }
+
+        let selectedDateForCalendar: Date | undefined = undefined;
+        if (rule.value instanceof Date) {
+           if (!isNaN(rule.value.getTime())) {
+            selectedDateForCalendar = rule.value;
+           }
+        } else if (typeof rule.value === 'string' && rule.value) {
+          const parsedDate = new Date(rule.value);
+          if (!isNaN(parsedDate.getTime())) {
+            selectedDateForCalendar = parsedDate;
+          }
+        }
+
         return (
           <Popover>
             <PopoverTrigger asChild>
@@ -36,18 +61,18 @@ export function RuleRow({ rule, onUpdateRule, onRemoveRule, isFirstRule, availab
                 variant={"outline"}
                 className={cn(
                   "w-full justify-start text-left font-normal",
-                  !rule.value && "text-muted-foreground"
+                  !displayDate && "text-muted-foreground"
                 )}
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
-                {rule.value && typeof rule.value === 'string' ? format(new Date(rule.value), "PPP") : (rule.value instanceof Date ? format(rule.value, "PPP") : <span>Pick a date</span>)}
+                {displayDate ? displayDate : <span>Pick a date</span>}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0">
               <Calendar
                 mode="single"
-                selected={rule.value ? new Date(rule.value as string | number | Date) : undefined}
-                onSelect={(date) => onUpdateRule(rule.id, { value: date || '' })}
+                selected={selectedDateForCalendar}
+                onSelect={(date) => onUpdateRule(rule.id, { value: date ?? undefined })}
                 initialFocus
               />
             </PopoverContent>
@@ -58,15 +83,16 @@ export function RuleRow({ rule, onUpdateRule, onRemoveRule, isFirstRule, availab
           <Input
             type="number"
             placeholder="Enter value"
-            value={rule.value as number}
-            onChange={(e) => onUpdateRule(rule.id, { value: parseFloat(e.target.value) })}
+            value={rule.value as number | undefined} // Allow undefined
+            onChange={(e) => onUpdateRule(rule.id, { value: e.target.value === '' ? undefined : parseFloat(e.target.value) })}
             className="w-full"
           />
         );
       case 'boolean':
         return (
           <Select
-            value={String(rule.value)}
+            // Ensure value is a string for Select, or undefined if rule.value is undefined
+            value={rule.value === undefined ? undefined : String(rule.value)}
             onValueChange={(value) => onUpdateRule(rule.id, { value: value === 'true' })}
           >
             <SelectTrigger className="w-full">
@@ -84,7 +110,7 @@ export function RuleRow({ rule, onUpdateRule, onRemoveRule, isFirstRule, availab
           <Input
             type="text"
             placeholder="Enter value"
-            value={rule.value as string}
+            value={rule.value as string | undefined} // Allow undefined
             onChange={(e) => onUpdateRule(rule.id, { value: e.target.value })}
             className="w-full"
           />
@@ -115,7 +141,7 @@ export function RuleRow({ rule, onUpdateRule, onRemoveRule, isFirstRule, availab
 
       <Select
         value={rule.field}
-        onValueChange={(value) => onUpdateRule(rule.id, { field: value, value: '' })} // Reset value on field change
+        onValueChange={(value) => onUpdateRule(rule.id, { field: value, value: undefined })} // Reset value to undefined on field change
       >
         <SelectTrigger className="w-full sm:w-[200px]">
           <SelectValue placeholder="Select field" />

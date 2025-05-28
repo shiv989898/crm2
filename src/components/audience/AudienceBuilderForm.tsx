@@ -76,7 +76,7 @@ export function AudienceBuilderForm() {
         id: Date.now().toString(),
         field: "",
         operator: "",
-        value: "",
+        value: undefined, // Initialize value as undefined
         logicalOperator: rules.length > 0 ? "AND" : undefined,
       },
     ]);
@@ -121,20 +121,25 @@ export function AudienceBuilderForm() {
       return;
     }
     
-    // Validate rules (basic validation)
+    // Validate rules
     for (const rule of rules) {
         const fieldConfig = AVAILABLE_FIELDS.find(f => f.value === rule.field);
         if (!rule.field || !rule.operator ) {
              toast({ title: "Incomplete Rule", description: `Rule for field "${rule.field || 'Unnamed'}" is missing field or operator. Please fill all parts.`, variant: "destructive" });
             return;
         }
-        // For non-boolean types, value should not be empty.
-        // For boolean types, value can be true/false and is usually set by a select, not direct input typically.
-        // The mapAiResponseToRules sets boolean values correctly, and RuleRow uses Select for boolean
-        if (fieldConfig?.type !== 'boolean' && rule.value === '') {
+        
+        // Check for value presence for non-boolean types.
+        // rule.value can be 0 (for numbers) or false (for booleans), which are valid.
+        // rule.value can also be an empty string for text fields if allowed by business logic (currently not explicitly disallowed here if not empty string strict check)
+        // We need to ensure that if a value is required, it's not undefined or null.
+        const isValueMissing = rule.value === undefined || rule.value === null || (typeof rule.value === 'string' && rule.value.trim() === '');
+
+        if (fieldConfig?.type !== 'boolean' && isValueMissing) {
              toast({ title: "Incomplete Rule", description: `Rule for field "${fieldConfig?.label || rule.field}" requires a value.`, variant: "destructive" });
             return;
         }
+
         if (rules.indexOf(rule) > 0 && !rule.logicalOperator) {
              toast({ title: "Logical Operator Missing", description: `Please select AND/OR for rule connecting to "${fieldConfig?.label || rule.field}".`, variant: "destructive" });
             return;
@@ -239,4 +244,3 @@ export function AudienceBuilderForm() {
     </div>
   );
 }
-
