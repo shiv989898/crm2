@@ -2,9 +2,9 @@
 import type { Campaign, CampaignStatus } from "@/types";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, CheckCircle, XCircle, Send, Clock, Loader2, AlertTriangle } from "lucide-react";
+import { Users, CheckCircle, XCircle, Send, Clock, Loader2, AlertTriangle, MessageSquare, Target } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { Progress } from "@/components/ui/progress"; // For processing status
+import { Progress } from "@/components/ui/progress";
 
 interface CampaignCardProps {
   campaign: Campaign;
@@ -13,11 +13,11 @@ interface CampaignCardProps {
 export function CampaignCard({ campaign }: CampaignCardProps) {
   const getStatusBadgeVariant = (status: CampaignStatus) => {
     switch (status) {
-      case "Sent": return "default"; 
+      case "Sent": return "default";
       case "Failed": return "destructive";
       case "Pending": return "secondary";
       case "Processing": return "secondary";
-      case "CompletedWithFailures": return "destructive"; // Or a new "warning" variant
+      case "CompletedWithFailures": return "destructive";
       case "Draft": return "outline";
       default: return "secondary";
     }
@@ -34,10 +34,16 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
       default: return <Clock className="h-4 w-4 text-muted-foreground" />;
     }
   };
-  
+
   const progressPercentage = campaign.status === 'Processing' && campaign.audienceSize > 0 && campaign.processedCount !== undefined
     ? (campaign.processedCount / campaign.audienceSize) * 100
     : 0;
+
+  const truncateText = (text: string | undefined, maxLength: number) => {
+    if (!text) return "N/A";
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength) + "...";
+  };
 
   return (
     <Card className="shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col justify-between">
@@ -55,6 +61,18 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
+          {campaign.objective && (
+            <div className="flex items-start text-sm text-muted-foreground">
+              <Target className="mr-2 h-4 w-4 mt-0.5 shrink-0" />
+              <span>Objective: {truncateText(campaign.objective, 70)}</span>
+            </div>
+          )}
+          {campaign.messageTemplate && (
+             <div className="flex items-start text-sm text-muted-foreground">
+              <MessageSquare className="mr-2 h-4 w-4 mt-0.5 shrink-0" />
+              <span>Template: "{truncateText(campaign.messageTemplate, 60)}"</span>
+            </div>
+          )}
           <div className="flex items-center text-sm text-muted-foreground">
             <Users className="mr-2 h-4 w-4" />
             <span>Target Audience: {campaign.audienceSize.toLocaleString()}</span>
@@ -68,7 +86,7 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
               </p>
             </div>
           )}
-          
+
           {(campaign.status === "Sent" || campaign.status === "CompletedWithFailures" || campaign.status === "Failed") && (
             <>
               <div className="flex items-center text-sm ">
@@ -81,7 +99,7 @@ export function CampaignCard({ campaign }: CampaignCardProps) {
               </div>
             </>
           )}
-          
+
            {campaign.status === "Failed" && campaign.sentCount === 0 && (
               <p className="text-sm text-red-600">This campaign failed to send to any recipients.</p>
            )}

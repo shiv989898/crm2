@@ -15,12 +15,12 @@ export type Audience = {
   description?: string; // Optional description, possibly from NLP
 };
 
-export type CampaignStatus = 
-  | 'Sent' 
-  | 'Failed' 
-  | 'Pending' 
-  | 'Draft' 
-  | 'Processing' 
+export type CampaignStatus =
+  | 'Sent'
+  | 'Failed'
+  | 'Pending'
+  | 'Draft'
+  | 'Processing'
   | 'CompletedWithFailures';
 
 export type Campaign = {
@@ -34,6 +34,8 @@ export type Campaign = {
   sentCount: number;
   failedCount: number;
   processedCount?: number; // Number of messages that have reached a final state (Sent/Failed)
+  objective?: string; // User-defined campaign objective
+  messageTemplate?: string; // Core message template with placeholders like {{customerName}}
 };
 
 export type UserProfile = {
@@ -48,7 +50,8 @@ export type CommunicationLogEntry = {
   campaignId: string;
   customerId: string; // Mock customer ID
   customerName: string; // Mock customer name for personalized message
-  message: string;
+  message: string; // The final personalized message sent
   status: 'Pending' | 'Sent' | 'Failed';
   timestamp: string; // ISO string
 };
+
