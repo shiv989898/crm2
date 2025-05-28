@@ -7,7 +7,7 @@ import { generateCampaignMessages, type GenerateCampaignMessagesInput, type Gene
 
 export async function getCampaignsAction(): Promise<Campaign[]> {
   console.log(`[getCampaignsAction] Called. Current MOCK_CAMPAIGNS length: ${MOCK_CAMPAIGNS.length}`);
-  console.log(`[getCampaignsAction] Campaigns:`, MOCK_CAMPAIGNS.map(c => ({ id: c.id, name: c.name, status: c.status, createdAt: c.createdAt })));
+  console.log(`[getCampaignsAction] Campaigns (names):`, MOCK_CAMPAIGNS.map(c => c.name));
   // Return a copy and sort to avoid unintended mutations and ensure consistent order
   const sortedCampaigns = [...MOCK_CAMPAIGNS].sort((a, b) => 
     new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -42,7 +42,7 @@ export async function deliveryReceiptAction(logId: string, deliveryStatus: 'Sent
   if (campaign.processedCount === campaign.audienceSize) {
     if (campaign.failedCount === 0 && campaign.sentCount === campaign.audienceSize) {
       campaign.status = 'Sent';
-    } else if (campaign.failedCount === campaign.audienceSize && campaign.sentCount === 0) {
+    } else if (campaign.sentCount === 0) { // Simplified: if nothing sent, it's failed or completed with only failures
       campaign.status = 'Failed';
     } else {
       campaign.status = 'CompletedWithFailures';
@@ -50,51 +50,56 @@ export async function deliveryReceiptAction(logId: string, deliveryStatus: 'Sent
     console.log(`[deliveryReceiptAction] Campaign ${campaign.id} final status updated: ${campaign.status}`);
   } else if (campaign.status !== 'Processing') {
     // If processing has started but not finished, ensure status is Processing
+    // This might be redundant if startCampaignProcessingAction sets it correctly
     campaign.status = 'Processing';
   }
 }
 
 export async function startCampaignProcessingAction(campaignToProcess: Campaign) {
-  console.log(`[startCampaignProcessingAction] Received campaign to process:`, { id: campaignToProcess.id, name: campaignToProcess.name, status: campaignToProcess.status });
-  // Ensure the campaign is in the server-side MOCK_CAMPAIGNS array.
-  let campaignInMock = MOCK_CAMPAIGNS.find(c => c.id === campaignToProcess.id);
+  console.log(`[startCampaignProcessingAction] Received campaign: { id: ${campaignToProcess.id}, name: "${campaignToProcess.name}", status: "${campaignToProcess.status}" }`);
 
-  if (!campaignInMock) {
-    MOCK_CAMPAIGNS.unshift({...campaignToProcess}); // Add a copy of the received campaign object
-    campaignInMock = MOCK_CAMPAIGNS.find(c => c.id === campaignToProcess.id)!; // Work with the object we just added
-    console.log(`[startCampaignProcessingAction] Campaign ${campaignToProcess.id} ADDED to MOCK_CAMPAIGNS. New MOCK_CAMPAIGNS length: ${MOCK_CAMPAIGNS.length}`);
-    console.log(`[startCampaignProcessingAction] Current MOCK_CAMPAIGNS (names):`, MOCK_CAMPAIGNS.map(c => c.name));
+  let campaignRef = MOCK_CAMPAIGNS.find(c => c.id === campaignToProcess.id);
+
+  if (!campaignRef) {
+    // Add the new campaign object to the MOCK_CAMPAIGNS array.
+    // Ensure all properties from campaignToProcess are copied.
+    // The campaignToProcess should already have status: "Pending".
+    MOCK_CAMPAIGNS.unshift({ ...campaignToProcess });
+    campaignRef = MOCK_CAMPAIGNS.find(c => c.id === campaignToProcess.id); // Get the reference from the array
+    console.log(`[startCampaignProcessingAction] Campaign "${campaignToProcess.name}" ADDED to MOCK_CAMPAIGNS. New length: ${MOCK_CAMPAIGNS.length}`);
   } else {
-    // Update existing campaign with potentially new details from campaignToProcess (e.g., if re-processing)
-    Object.assign(campaignInMock, campaignToProcess);
-    console.log(`[startCampaignProcessingAction] Campaign ${campaignToProcess.id} UPDATED in MOCK_CAMPAIGNS.`);
+    // If campaign exists, update it with details from campaignToProcess
+    // This might be for re-processing or if an ID collision occurred (unlikely with Date.now() in ID)
+    Object.assign(campaignRef, campaignToProcess);
+    console.log(`[startCampaignProcessingAction] Campaign "${campaignToProcess.name}" UPDATED in MOCK_CAMPAIGNS.`);
   }
   
-  // Ensure we are working with the campaign object from the MOCK_CAMPAIGNS array
-  const campaign = campaignInMock; 
+  // Log the current state of MOCK_CAMPAIGNS after add/update
+  console.log(`[startCampaignProcessingAction] MOCK_CAMPAIGNS (names) after add/update:`, MOCK_CAMPAIGNS.map(c => c.name));
 
-  if (!campaign) {
-    // This should ideally not happen if the above logic is correct
-    console.error(`[startCampaignProcessingAction] Critical error: Campaign ${campaignToProcess.id} is still not found in MOCK_CAMPAIGNS after attempting to add/update.`);
+  if (!campaignRef) {
+    // This state should be very unlikely if the above logic is correct
+    console.error(`[startCampaignProcessingAction] CRITICAL ERROR: Campaign "${campaignToProcess.name}" not found in MOCK_CAMPAIGNS after attempt to add/update.`);
     throw new Error(`Campaign ${campaignToProcess.id} could not be prepared for processing.`);
   }
-
+  
+  // Work with campaignRef which is guaranteed to be the object from the MOCK_CAMPAIGNS array
   // Initialize/reset counts for processing
-  campaign.status = "Pending"; // Set initial status
-  campaign.processedCount = 0;
-  campaign.sentCount = 0;
-  campaign.failedCount = 0;
-  console.log(`[startCampaignProcessingAction] Campaign ${campaign.id} status initialized to Pending. Target audience size: ${campaign.audienceSize}`);
+  campaignRef.status = "Pending"; // Ensure status is Pending before short delay
+  campaignRef.processedCount = 0;
+  campaignRef.sentCount = 0;
+  campaignRef.failedCount = 0;
+  console.log(`[startCampaignProcessingAction] Campaign "${campaignRef.name}" (${campaignRef.id}) initialized. Target audience size: ${campaignRef.audienceSize}. Status: ${campaignRef.status}`);
 
   // Short delay to allow UI to potentially show "Pending" before "Processing"
-  await new Promise(r => setTimeout(r, 50)); 
+  await new Promise(r => setTimeout(r, 100)); // Increased delay slightly for observation
 
-  campaign.status = 'Processing';
-  console.log(`[startCampaignProcessingAction] Campaign ${campaign.id} status set to Processing.`);
+  campaignRef.status = 'Processing';
+  console.log(`[startCampaignProcessingAction] Campaign "${campaignRef.name}" (${campaignRef.id}) status changed to Processing.`);
 
-  // Clear previous logs for this campaign if re-processing (optional, depends on desired behavior)
+  // Clear previous logs for this campaign if re-processing
   const existingLogIndexes = MOCK_COMMUNICATION_LOGS.reduce((acc, log, index) => {
-    if (log.campaignId === campaign.id) {
+    if (log.campaignId === campaignRef!.id) { // Use campaignRef
       acc.push(index);
     }
     return acc;
@@ -105,51 +110,49 @@ export async function startCampaignProcessingAction(campaignToProcess: Campaign)
 
   const processingPromises: Promise<void>[] = [];
 
-  for (let i = 0; i < campaign.audienceSize; i++) {
-    const customerId = `cust-${campaign.id}-${Date.now()}-${i}`;
+  for (let i = 0; i < campaignRef.audienceSize; i++) {
+    const customerId = `cust-${campaignRef.id}-${Date.now()}-${i}`;
     const firstNames = ["Alex", "Jamie", "Chris", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Drew", "Skyler"];
     const lastInitials = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     const customerName = `${firstNames[i % firstNames.length]} ${lastInitials[i % lastInitials.length]}.`;
 
-    let message = campaign.messageTemplate ? campaign.messageTemplate.replace(/\{\{customerName\}\}/gi, customerName) : `Hi ${customerName}, here's a special offer for you!`;
+    let message = campaignRef.messageTemplate ? campaignRef.messageTemplate.replace(/\{\{customerName\}\}/gi, customerName) : `Hi ${customerName}, here's a special offer for you!`;
     
-    const logId = `log-${campaign.id}-${Date.now()}-${i}`;
+    const logId = `log-${campaignRef.id}-${Date.now()}-${i}`;
 
     const logEntry: CommunicationLogEntry = {
       logId,
-      campaignId: campaign.id,
+      campaignId: campaignRef.id,
       customerId,
       customerName,
       message,
-      status: 'Pending', // Initial log status
+      status: 'Pending', 
       timestamp: new Date().toISOString(),
     };
     MOCK_COMMUNICATION_LOGS.push(logEntry);
 
     const promise = (async () => {
       try {
-        // Simulate vendor API call delay
         await new Promise(r => setTimeout(r, Math.random() * 150 + 50)); 
-        const isSuccess = Math.random() < 0.9; // 90% success rate
+        const isSuccess = Math.random() < 0.9; 
         const deliveryStatus = isSuccess ? 'Sent' : 'Failed';
-        // Simulate vendor hitting our delivery receipt API
         await deliveryReceiptAction(logId, deliveryStatus);
       } catch (error) {
         console.error(`[startCampaignProcessingAction] Error processing message for logId ${logId}:`, error);
-        // Ensure delivery receipt is called even on unexpected error during simulation
         await deliveryReceiptAction(logId, 'Failed');
       }
     })();
     processingPromises.push(promise);
   }
 
-  Promise.allSettled(processingPromises).then(results => {
-    console.log(`[startCampaignProcessingAction] All simulated messages for campaign ${campaign.id} have been dispatched for processing and their simulated vendor calls initiated.`);
+  // No need to update campaign status here, deliveryReceiptAction handles final status
+  Promise.allSettled(processingPromises).then(() => {
+    console.log(`[startCampaignProcessingAction] All simulated messages for campaign "${campaignRef.name}" (${campaignRef.id}) dispatched for processing.`);
   }).catch(error => {
-    console.error(`[startCampaignProcessingAction] Unexpected error in Promise.allSettled for campaign ${campaign.id}:`, error);
+    console.error(`[startCampaignProcessingAction] Unexpected error in Promise.allSettled for campaign "${campaignRef.name}" (${campaignRef.id}):`, error);
   });
 
-  console.log(`[startCampaignProcessingAction] Campaign ${campaign.id} processing initiated. ${campaign.audienceSize} messages queued.`);
+  console.log(`[startCampaignProcessingAction] Campaign "${campaignRef.name}" processing initiated. ${campaignRef.audienceSize} messages queued.`);
 }
 
 
@@ -161,6 +164,7 @@ export async function generateCampaignMessagesAction(
     return result;
   } catch (error) {
     console.error("Error in generateCampaignMessagesAction:", error);
-    return []; // Return empty array on error
+    return []; 
   }
 }
+
