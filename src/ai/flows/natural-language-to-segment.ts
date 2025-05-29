@@ -39,7 +39,20 @@ export type NaturalLanguageToSegmentOutput = z.infer<typeof NaturalLanguageToSeg
 export async function naturalLanguageToSegment(
   input: NaturalLanguageToSegmentInput
 ): Promise<NaturalLanguageToSegmentOutput> {
-  return naturalLanguageToSegmentFlow(input);
+  console.log('[naturalLanguageToSegmentFlow] Received input:', JSON.stringify(input));
+  try {
+    const result = await naturalLanguageToSegmentFlow(input);
+    console.log('[naturalLanguageToSegmentFlow] Successfully returned result:', JSON.stringify(result));
+    return result;
+  } catch (error) {
+    console.error('[naturalLanguageToSegmentFlow] Error executing flow:', error);
+    // Return a default structure in case of a top-level error to avoid breaking client expectations further
+    return {
+      segmentRules: '{"conditions":[]}',
+      suggestedAudienceName: '',
+      suggestedAudienceDescription: 'Error generating suggestions. Please check server logs.',
+    };
+  }
 }
 
 const prompt = ai.definePrompt({
@@ -107,14 +120,31 @@ const naturalLanguageToSegmentFlow = ai.defineFlow(
     outputSchema: NaturalLanguageToSegmentOutputSchema,
   },
   async input => {
-    const {output} = await prompt(input);
+    console.log('[naturalLanguageToSegmentFlow defineFlow] Processing input:', JSON.stringify(input));
+    let outputFromPrompt;
+    try {
+      const { output } = await prompt(input);
+      outputFromPrompt = output;
+      console.log('[naturalLanguageToSegmentFlow defineFlow] Raw output from prompt:', JSON.stringify(outputFromPrompt));
+    } catch (error) {
+      console.error('[naturalLanguageToSegmentFlow defineFlow] Error calling prompt:', error);
+      // Return a default structure if prompt fails
+      return {
+        segmentRules: '{"conditions":[]}',
+        suggestedAudienceName: '',
+        suggestedAudienceDescription: 'AI prompt failed. Check server logs.',
+      };
+    }
+    
     // Ensure output is not null and adheres to the schema.
     // If the AI fails to generate some parts, provide defaults.
-    return {
-        segmentRules: output?.segmentRules || '{"conditions":[]}',
-        suggestedAudienceName: output?.suggestedAudienceName || '',
-        suggestedAudienceDescription: output?.suggestedAudienceDescription || '',
+    const finalOutput = {
+        segmentRules: outputFromPrompt?.segmentRules || '{"conditions":[]}',
+        suggestedAudienceName: outputFromPrompt?.suggestedAudienceName || '',
+        suggestedAudienceDescription: outputFromPrompt?.suggestedAudienceDescription || '',
     };
+    console.log('[naturalLanguageToSegmentFlow defineFlow] Final constructed output:', JSON.stringify(finalOutput));
+    return finalOutput;
   }
 );
 
