@@ -60,7 +60,7 @@ const mapAiResponseToRules = (aiJsonString: string): SegmentRule[] => {
       });
     }
   } catch (error) {
-    console.error("Error parsing AI segmentRules string:", error, "Input string:", aiJsonString);
+    console.error("Error parsing AI segmentRules string in NlpSegmentTool. mapAiResponseToRules. Input string:", aiJsonString, "Error:", error);
     // The calling function will show a toast if this returns an empty array.
   }
   return [];
@@ -78,13 +78,18 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
       return;
     }
     setIsLoading(true);
+    console.log('[NlpSegmentTool] handleSubmit - Calling naturalLanguageToSegmentAction with prompt:', prompt);
     try {
       const result = await naturalLanguageToSegmentAction({ naturalLanguageDescription: prompt });
+      console.log('[NlpSegmentTool] handleSubmit - Received result from AI action:', JSON.stringify(result));
       
       let generatedRules: SegmentRule[] = [];
-      if (result.segmentRules) {
+      if (result.segmentRules && typeof result.segmentRules === 'string' && result.segmentRules.trim() !== "") {
         generatedRules = mapAiResponseToRules(result.segmentRules);
+      } else if (result.segmentRules) {
+        console.warn('[NlpSegmentTool] handleSubmit - segmentRules received from AI was not a non-empty string:', result.segmentRules);
       }
+
 
       if (generatedRules.length > 0) {
         onRulesGenerated(generatedRules, prompt, result.suggestedAudienceName || "", result.suggestedAudienceDescription || "");
@@ -92,13 +97,15 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
       } else if (result.segmentRules && generatedRules.length === 0) {
         // This means segmentRules string was present but parsing failed or resulted in no conditions
         toast({ title: "AI Response Issue", description: "Could not effectively parse rules from AI response. The rules might be empty or malformed. Please try a different prompt or refine rules manually.", variant: "destructive" });
+        console.error('[NlpSegmentTool] handleSubmit - Parsing AI segmentRules resulted in empty rules. Original segmentRules string:', result.segmentRules);
       }
        else {
         // AI returned no segment rule data at all, or suggested name/description might be empty
-        toast({ title: "AI Error", description: "Failed to generate rules or suggestions. The AI returned incomplete data. Please try again.", variant: "destructive" });
+        toast({ title: "AI Error", description: "Failed to generate rules or suggestions. The AI returned incomplete data. Please check Vercel logs for flow errors.", variant: "destructive" });
+        console.error('[NlpSegmentTool] handleSubmit - AI returned no segmentRules or they were invalid. Full result:', JSON.stringify(result));
       }
     } catch (error) {
-      console.error("Error calling AI action:", error);
+      console.error("[NlpSegmentTool] handleSubmit - Error calling AI action:", error);
       toast({ title: "Error", description: `An unexpected error occurred: ${error instanceof Error ? error.message : String(error)}`, variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -136,4 +143,3 @@ export function NlpSegmentTool({ onRulesGenerated }: NlpSegmentToolProps) {
     </Card>
   );
 }
-
